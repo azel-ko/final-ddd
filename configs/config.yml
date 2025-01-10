@@ -1,0 +1,26 @@
+# configs/config.yml
+app:
+  name: final-ddd
+  port: 9999
+  env: debug # or release, test
+
+database:
+  type: mysql # or postgres, sqlite
+  user: root
+  password: newroot
+  host: 192.168.7.91
+  port: 3307
+  name: test1
+  path: ./sqlite_data
+
+jwt:
+  key: "123456"
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+log:
+  level: info
+  format: json
