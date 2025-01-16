@@ -8,9 +8,9 @@ database:
   type: mysql # or postgres, sqlite
   user: root
   password: newroot
-  host: 127.0.0.1
+  host: mysql
   port: 3306
-  name: test1
+  name: test
   path: ./sqlite_data
 
 jwt:
