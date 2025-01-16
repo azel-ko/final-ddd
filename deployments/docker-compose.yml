@@ -10,7 +10,7 @@ services:
       - "8082:8082" # Prometheus metrics
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ../configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - traefik_logs:/var/log/traefik
     networks:
       - app_network
@@ -99,7 +99,7 @@ services:
     image: docker.1ms.run/prom/prometheus:latest
     container_name: prometheus
     volumes:
-      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../configs/prometheus/:/etc/prometheus/
       - prometheus_data:/prometheus
     networks:
       - app_network
@@ -115,7 +115,7 @@ services:
     container_name: grafana
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+      - ../configs/grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
