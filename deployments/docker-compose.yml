@@ -164,3 +164,4 @@ volumes:
   prometheus_data:
   grafana_data:
   traefik_logs:
+  app_log_data:
