@@ -24,6 +24,7 @@ export DB_PASSWORD=$(yq e '.database.password' "$CONFIG_FILE")
 export DB_PORT=$(yq e '.database.port' "$CONFIG_FILE")
 export DB_NAME=$(yq e '.database.name' "$CONFIG_FILE")
 export DB_PATH=$(yq e '.database.path' "$CONFIG_FILE")
+export REDIS_PORT=$(yq e '.redis.path' "$CONFIG_FILE")
 
 # 打印环境变量以验证（可选）
 echo "Environment variables have been set from $CONFIG_FILE:"

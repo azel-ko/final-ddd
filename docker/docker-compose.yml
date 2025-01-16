@@ -93,6 +93,8 @@ services:
       - redis_data:/data
     networks:
       - app_network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
 
   rabbitmq:
     image: docker.1ms.run/rabbitmq:4

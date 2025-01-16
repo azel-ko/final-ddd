@@ -8,13 +8,14 @@ database:
   type: mysql # or postgres, sqlite
   user: root
   password: newroot
-  host: 192.168.7.91
-  port: 3307
-  name: test2
+  host: mysql
+  port: 3306
+  name: test
   path: ./sqlite_data
 
 jwt:
   key: "123456"
+
 redis:
   host: "localhost"
   port: 6379
