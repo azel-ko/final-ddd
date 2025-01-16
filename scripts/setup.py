@@ -36,4 +36,4 @@ for key in os.environ:
         print(f"{key}={os.environ[key]}")
 
 # 如果需要执行 docker-compose
-subprocess.run(["docker-compose","--profile", database.get('type', ''), "-f", "../deployments/docker-compose.yml", "up", "--build", "-d"])
+subprocess.run(["docker-compose","--profile", database.get('type', ''), "-f", "../deployments/docker-compose.yml", "up", "-d"])

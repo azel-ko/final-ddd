@@ -52,6 +52,6 @@ type User struct {
 	Email     string    `gorm:"size:255;not null;unique"`
 	Password  string    `gorm:"size:255;not null"`
 	Role      string    `gorm:"size:255;not null;default:'user'"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
 }

@@ -2,3 +2,10 @@
 {"level":"info  ","timestamp":"2025-01-10 17:30:44.490","caller":"persistence/factory.go:46","msg":"Database setup completed"}
 {"level":"info  ","timestamp":"2025-01-10 17:30:44.498","caller":"migration/migration.go:100","msg":"migration setup completed"}
 {"level":"info  ","timestamp":"2025-01-10 17:30:44.498","caller":"cache/redis.go:20","msg":"Redis setup completed"}
+{"level":"info  ","timestamp":"2025-01-16 17:19:04.887","caller":"logger/logger.go:85","msg":"Starting application..."}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.801","caller":"logger/logger.go:85","msg":"Starting application..."}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.828","caller":"persistence/factory.go:46","msg":"Database setup completed"}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.923","caller":"migration/migration.go:97","msg":"Applied migration","ID":"002_create_books_table"}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.966","caller":"migration/migration.go:97","msg":"Applied migration","ID":"002_create_users_table"}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.966","caller":"migration/migration.go:100","msg":"migration setup completed"}
+{"level":"info  ","timestamp":"2025-01-16 17:19:30.966","caller":"cache/redis.go:20","msg":"Redis setup completed"}

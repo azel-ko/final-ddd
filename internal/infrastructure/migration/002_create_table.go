@@ -50,6 +50,6 @@ type Book struct {
 	Title     string    `gorm:"size:255;not null"`
 	Author    string    `gorm:"size:255;not null"`
 	ISBN      string    `gorm:"size:20;not null;unique"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
 }

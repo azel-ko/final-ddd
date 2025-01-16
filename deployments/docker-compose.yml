@@ -28,14 +28,15 @@ services:
     profiles:
       - mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
       MYSQL_DATABASE: ${DB_NAME:-app}
-      MYSQL_USER: ${DB_USER:-user}
+      MYSQL_USER: user
       MYSQL_PASSWORD: ${DB_PASSWORD:-password}
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ../configs/mysql/my.cnf:/etc/mysql/my.cnf:ro
     networks:
       - app_network
 
@@ -142,6 +143,8 @@ services:
       - "traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api"
     networks:
       - app_network
+    volumes:
+      - app_log_data:/app/logs
     depends_on:
       - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
       - redis
