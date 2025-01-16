@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.9'
 services:
   traefik:
     image: docker.1ms.run/traefik:v2.10
@@ -22,28 +22,11 @@ services:
       - "traefik.http.middlewares.dashboard-stripprefix.stripprefix.prefixes=/dashboard"
       - "traefik.http.routers.dashboard.entrypoints=web"
 
-  app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: go-app
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`azel.icu`) && PathPrefix(`/api`)"
-      - "traefik.http.services.app.loadbalancer.server.port=8080"
-      - "traefik.http.routers.app.middlewares=app-stripprefix"
-      - "traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api"
-    networks:
-      - app_network
-    depends_on:
-      - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
-      - redis
-      - rabbitmq
-
   mysql:
     image: docker.1ms.run/mysql:8.0
     container_name: mysql
-    profiles: ["mysql"] # 只在使用 MySQL 时启动
+    profiles:
+      - mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
       MYSQL_DATABASE: ${DB_NAME:-app}
@@ -59,7 +42,8 @@ services:
   postgres:
     image: docker.1ms.run/postgres:14
     container_name: postgres
-    profiles: ["postgres"] # 只在使用 PostgreSQL 时启动
+    profiles:
+      - postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-app}
       POSTGRES_USER: ${DB_USER:-user}
@@ -73,7 +57,8 @@ services:
   sqlite:
     image: docker.1ms.run/alpine:latest
     container_name: sqlite
-    profiles: ["sqlite"]  # 只在使用 SQLite 时启动
+    profiles:
+      - sqlite
     volumes:
       - sqlite_data:/data  # 持久化存储SQLite数据文件
       - ${DB_PATH:-./sqlite_data}:/data/external # 外部SQLite文件映射
@@ -142,6 +127,26 @@ services:
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
       - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
       - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: go-app:latest  # 设置镜像 tag
+    container_name: go-app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`azel.icu`) && PathPrefix(`/api`)"
+      - "traefik.http.services.app.loadbalancer.server.port=8080"
+      - "traefik.http.routers.app.middlewares=app-stripprefix"
+      - "traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api"
+    networks:
+      - app_network
+    depends_on:
+      - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
+      - redis
+      - rabbitmq
+
 
 networks:
   app_network:
