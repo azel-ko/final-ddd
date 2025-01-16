@@ -1,0 +1,156 @@
+version: '3.8'
+services:
+  traefik:
+    image: docker.1ms.run/traefik:v2.10
+    container_name: traefik
+    ports:
+      - "80:80"     # HTTP
+      - "443:443"   # HTTPS
+      - "8080:8080" # Dashboard
+      - "8082:8082" # Prometheus metrics
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik_logs:/var/log/traefik
+    networks:
+      - app_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`azel.icu`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-stripprefix"
+      - "traefik.http.middlewares.dashboard-stripprefix.stripprefix.prefixes=/dashboard"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: go-app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`azel.icu`) && PathPrefix(`/api`)"
+      - "traefik.http.services.app.loadbalancer.server.port=8080"
+      - "traefik.http.routers.app.middlewares=app-stripprefix"
+      - "traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api"
+    networks:
+      - app_network
+    depends_on:
+      - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
+      - redis
+      - rabbitmq
+
+  mysql:
+    image: docker.1ms.run/mysql:8.0
+    container_name: mysql
+    profiles: ["mysql"] # 只在使用 MySQL 时启动
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-app}
+      MYSQL_USER: ${DB_USER:-user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app_network
+
+  postgres:
+    image: docker.1ms.run/postgres:14
+    container_name: postgres
+    profiles: ["postgres"] # 只在使用 PostgreSQL 时启动
+    environment:
+      POSTGRES_DB: ${DB_NAME:-app}
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+  sqlite:
+    image: docker.1ms.run/alpine:latest
+    container_name: sqlite
+    profiles: ["sqlite"]  # 只在使用 SQLite 时启动
+    volumes:
+      - sqlite_data:/data  # 持久化存储SQLite数据文件
+      - ${DB_PATH:-./sqlite_data}:/data/external # 外部SQLite文件映射
+    command: |
+      sh -c "
+        apk add --no-cache sqlite
+        chown -R 1000:1000 /data
+        tail -f /dev/null
+      "
+    networks:
+      - app_network
+
+  redis:
+    image: docker.1ms.run/redis:7.0
+    container_name: redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: docker.1ms.run/rabbitmq:4
+    container_name: rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`azel.icu`) && PathPrefix(`/rabbitmq`)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+      - "traefik.http.routers.rabbitmq.middlewares=rabbitmq-stripprefix"
+      - "traefik.http.middlewares.rabbitmq-stripprefix.stripprefix.prefixes=/rabbitmq"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app_network
+
+  prometheus:
+    image: docker.1ms.run/prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - app_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`azel.icu`) && PathPrefix(`/prometheus`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.http.routers.prometheus.middlewares=prometheus-stripprefix"
+      - "traefik.http.middlewares.prometheus-stripprefix.stripprefix.prefixes=/prometheus"
+
+  grafana:
+    image: docker.1ms.run/grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - app_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`azel.icu`) && PathPrefix(`/grafana`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
+      - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  postgres_data:
+  sqlite_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  traefik_logs:

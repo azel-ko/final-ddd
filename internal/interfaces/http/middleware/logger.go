@@ -32,15 +32,17 @@ func LoggerMiddleware() gin.HandlerFunc {
 			logFunc = logger.Error
 		}
 
-		logFunc("Request completed",
-			zap.Int("status", status),
-			zap.Duration("latency", latency),
-			zap.Int("size", c.Writer.Size()),
-			zap.String("path", path),
-			zap.String("query", query),
-			zap.String("ip", c.ClientIP()),
-			zap.String("method", c.Request.Method),
-			zap.String("error", c.Errors.ByType(gin.ErrorTypePrivate).String()),
-		)
+		if status != 404 {
+			logFunc("Request completed",
+				zap.Int("status", status),
+				zap.Duration("latency", latency),
+				zap.Int("size", c.Writer.Size()),
+				zap.String("path", path),
+				zap.String("query", query),
+				zap.String("ip", c.ClientIP()),
+				zap.String("method", c.Request.Method),
+				zap.String("error", c.Errors.ByType(gin.ErrorTypePrivate).String()),
+			)
+		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/azel-ko/final-ddd/pkg/auth"
 	"github.com/azel-ko/final-ddd/pkg/config"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.RedisCache) *gin.Engine {
@@ -17,8 +18,9 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 	r := gin.Default()
 	r.Use(
 		middleware.RateLimitMiddleware(),
-		middleware.ErrorHandler(),
+		middleware.PrometheusMiddleware(),
 		middleware.LoggerMiddleware(),
+		middleware.ErrorHandler(),
 		middleware.CORSMiddleware(),
 		//middleware.SourceMiddleware(),
 	)
@@ -33,6 +35,7 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 
 	r.POST("/api/auth/login", authHandler.Login)
 	r.POST("/api/auth/register", authHandler.Register)
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware(jwtManager))

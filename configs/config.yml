@@ -2,7 +2,7 @@
 app:
   name: final-ddd
   port: 9999
-  env: debug # or release, test
+  env: release #, debug # or release, test
 
 database:
   type: mysql # or postgres, sqlite
@@ -10,7 +10,7 @@ database:
   password: newroot
   host: 192.168.7.91
   port: 3307
-  name: test1
+  name: test2
   path: ./sqlite_data
 
 jwt:

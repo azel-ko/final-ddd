@@ -7,6 +7,7 @@ import (
 	"github.com/azel-ko/final-ddd/internal/infrastructure/persistence"
 	"github.com/azel-ko/final-ddd/internal/interfaces/http/router"
 	"github.com/azel-ko/final-ddd/pkg/config"
+	inits "github.com/azel-ko/final-ddd/pkg/database/inits"
 	migr "github.com/azel-ko/final-ddd/pkg/database/migration"
 	"github.com/azel-ko/final-ddd/pkg/logger"
 	"go.uber.org/zap"
@@ -21,6 +22,17 @@ func main() {
 	}
 
 	logger.Init(cfg.Log.Level)
+
+	// 根据数据库类型创建初始化器
+	initr, err := inits.NewDatabaseInitializer(cfg)
+	if err != nil {
+		log.Fatalf("创建数据库初始化器失败: %v", err)
+	}
+	// 初始化数据库
+	err = initr.Initialize()
+	if err != nil {
+		log.Fatalf("初始化数据库失败: %v", err)
+	}
 
 	// 初始化数据库连接
 	repo, db, err := persistence.NewRepository(cfg)
