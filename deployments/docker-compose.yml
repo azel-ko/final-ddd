@@ -149,6 +149,7 @@ services:
       - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
       - redis
       - rabbitmq
+    restart: unless-stopped
 
 
 networks:
