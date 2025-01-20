@@ -6,21 +6,24 @@ services:
     ports:
       - "80:80"     # HTTP
       - "443:443"   # HTTPS
-      - "8080:8080" # Dashboard
-      - "8082:8082" # Prometheus metrics
+      - "8080:8080" # Dashboard (可选，建议生产环境关闭)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ../configs/traefik/dynamic:/etc/traefik/dynamic:ro
+      - ../configs/traefik/acme.json:/etc/traefik/acme.json
       - traefik_logs:/var/log/traefik
     networks:
       - app_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`azel.icu`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.azel.icu`)"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-stripprefix"
-      - "traefik.http.middlewares.dashboard-stripprefix.stripprefix.prefixes=/dashboard"
-      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+        # - "traefik.http.middlewares.auth.basicauth.users=admin:$$apr1$$xyz123......" # 使用 htpasswd 生成
+        # - "traefik.http.routers.dashboard.middlewares=auth"
+    restart: unless-stopped
 
   mysql:
     image: docker.1ms.run/mysql:8.0
@@ -28,9 +31,9 @@ services:
     profiles:
       - mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${DB_NAME:-app}
-      MYSQL_USER: user
+      MYSQL_USER: ${DB_USER:-user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-password}
     ports:
       - "${DB_PORT:-3306}:3306"
@@ -39,6 +42,12 @@ services:
       - ../configs/mysql/my.cnf:/etc/mysql/my.cnf:ro
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   postgres:
     image: docker.1ms.run/postgres:14
@@ -49,20 +58,28 @@ services:
       POSTGRES_DB: ${DB_NAME:-app}
       POSTGRES_USER: ${DB_USER:-user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   sqlite:
     image: docker.1ms.run/alpine:latest
     container_name: sqlite
     profiles:
       - sqlite
     volumes:
-      - sqlite_data:/data  # 持久化存储SQLite数据文件
-      - ${DB_PATH:-./sqlite_data}:/data/external # 外部SQLite文件映射
+      - sqlite_data:/data
+      - ${DB_PATH:-./sqlite_data}:/data/external
     command: |
       sh -c "
         apk add --no-cache sqlite
@@ -71,30 +88,47 @@ services:
       "
     networks:
       - app_network
+    restart: unless-stopped
 
   redis:
     image: docker.1ms.run/redis:7.0
     container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-password}
     volumes:
       - redis_data:/data
     networks:
       - app_network
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   rabbitmq:
-    image: docker.1ms.run/rabbitmq:4
+    image: docker.1ms.run/rabbitmq:4-management
     container_name: rabbitmq
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.rabbitmq.rule=Host(`azel.icu`) && PathPrefix(`/rabbitmq`)"
-      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
-      - "traefik.http.routers.rabbitmq.middlewares=rabbitmq-stripprefix"
-      - "traefik.http.middlewares.rabbitmq-stripprefix.stripprefix.prefixes=/rabbitmq"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-password}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.azel.icu`)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
+      - "traefik.http.routers.rabbitmq.tls.certresolver=letsencrypt"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
 
   prometheus:
     image: docker.1ms.run/prom/prometheus:latest
@@ -106,10 +140,11 @@ services:
       - app_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`azel.icu`) && PathPrefix(`/prometheus`)"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.azel.icu`)"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
-      - "traefik.http.routers.prometheus.middlewares=prometheus-stripprefix"
-      - "traefik.http.middlewares.prometheus-stripprefix.stripprefix.prefixes=/prometheus"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+    restart: unless-stopped
 
   grafana:
     image: docker.1ms.run/grafana/grafana:latest
@@ -118,39 +153,54 @@ services:
       - grafana_data:/var/lib/grafana
       - ../configs/grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=https://grafana.azel.icu
     networks:
       - app_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`azel.icu`) && PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.azel.icu`)"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
-      - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
-      - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
   app:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: go-app:latest  # 设置镜像 tag
+    image: go-app:latest
     container_name: go-app
+    environment:
+      - DB_HOST=${DATABASE_SERVICE:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-app}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`azel.icu`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.app.rule=Host(`api.azel.icu`)"
       - "traefik.http.services.app.loadbalancer.server.port=8080"
-      - "traefik.http.routers.app.middlewares=app-stripprefix"
-      - "traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
     networks:
       - app_network
     volumes:
       - app_log_data:/app/logs
     depends_on:
-      - ${DATABASE_SERVICE:-mysql} # 动态依赖数据库服务
+      - ${DATABASE_SERVICE:-mysql}
       - redis
       - rabbitmq
     restart: unless-stopped
-
 
 networks:
   app_network:
