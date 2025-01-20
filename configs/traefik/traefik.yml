@@ -8,6 +8,8 @@ api:
   insecure: false # 禁用不安全的dashboard访问
 
 entryPoints:
+  metrics:
+    address: ":8082"
   web:
     address: ":80"
     http:
@@ -19,15 +21,9 @@ entryPoints:
     address: ":443"
     http:
       tls:
-        certResolver: letsencrypt
-
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: your-email@example.com
-      storage: /etc/traefik/acme.json
-      httpChallenge:
-        entryPoint: web
+        certificates:
+          - certFile: /etc/traefik/certs/azel.icu.crt
+            keyFile: /etc/traefik/certs/azel.icu.key
 
 providers:
   docker:
@@ -40,9 +36,9 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-log:
-  level: DEBUG
-  filePath: "/var/log/traefik/traefik.log"
+      #log:
+      #  level: DEBUG
+      #  filePath: "/var/log/traefik/traefik.log"
 
 accessLog:
   filePath: "/var/log/traefik/access.log"

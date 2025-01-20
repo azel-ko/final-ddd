@@ -6,23 +6,41 @@ services:
     ports:
       - "80:80"     # HTTP
       - "443:443"   # HTTPS
-      - "8080:8080" # Dashboard (可选，建议生产环境关闭)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ../configs/traefik/dynamic:/etc/traefik/dynamic:ro
       - ../configs/traefik/acme.json:/etc/traefik/acme.json
+      - ../configs/traefik/certs:/etc/traefik/certs
       - traefik_logs:/var/log/traefik
     networks:
       - app_network
+    command:
+      - "--api=true"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--ping=true"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.leresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.leresolver.acme.email=a@163.com"
+      - "--certificatesresolvers.leresolver.acme.storage=acme.json"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.azel.icu`)"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-        # - "traefik.http.middlewares.auth.basicauth.users=admin:$$apr1$$xyz123......" # 使用 htpasswd 生成
-        # - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.rule=PathPrefix(`/dash`)"
+      - "traefik.http.middlewares.traefik-dashboard_strip.stripprefix.prefixes=/dash"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard_strip"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=leresolver"
+
+      - "traefik.http.routers.traefik-dashboard-api.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard-api.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard-api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.traefik-dashboard-api.tls.certresolver=leresolver"
     restart: unless-stopped
 
   mysql:
@@ -117,12 +135,9 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.azel.icu`)"
-      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
-      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
-      - "traefik.http.routers.rabbitmq.tls.certresolver=letsencrypt"
+    ports:
+      - "15672:15672"  # Management UI
+      - "5672:5672"    # AMQP protocol (for messaging)
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 30s
@@ -138,12 +153,8 @@ services:
       - prometheus_data:/prometheus
     networks:
       - app_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`prometheus.azel.icu`)"
-      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
-      - "traefik.http.routers.prometheus.entrypoints=websecure"
-      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+    ports:
+     - "9090:9090"  # Management UI
     restart: unless-stopped
 
   grafana:
@@ -158,12 +169,9 @@ services:
       - GF_SERVER_ROOT_URL=https://grafana.azel.icu
     networks:
       - app_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`grafana.azel.icu`)"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    ports:
+      - "3000:3000"  # Management UI
+
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -173,25 +181,15 @@ services:
       context: ..
       dockerfile: Dockerfile
     image: go-app:latest
-    container_name: go-app
-    environment:
-      - DB_HOST=${DATABASE_SERVICE:-mysql}
-      - DB_PORT=${DB_PORT:-3306}
-      - DB_USER=${DB_USER:-user}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
-      - DB_NAME=${DB_NAME:-app}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=${RABBITMQ_USER:-admin}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
+    container_name: app
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`api.azel.icu`)"
-      - "traefik.http.services.app.loadbalancer.server.port=8080"
       - "traefik.http.routers.app.entrypoints=websecure"
-      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.app.loadbalancer.server.port=9999"
+      - "traefik.http.routers.app.rule=PathPrefix(`/app`)"
+      - "traefik.http.middlewares.app_strip.stripprefix.prefixes=/app"
+      - "traefik.http.routers.app.middlewares=app_strip"
+      - "traefik.http.routers.app.tls.certresolver=leresolver"
     networks:
       - app_network
     volumes:
