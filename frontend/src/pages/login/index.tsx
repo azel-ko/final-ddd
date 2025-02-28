@@ -27,14 +27,12 @@ export default function Login() {
   }
 
   return (
-    <div style={{ 
-      height: '100vh',
-      background: '#f0f2f5',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}>
+    <div className="min-h-screen w-full m-0 p-0 overflow-hidden bg-center bg-no-repeat bg-cover flex items-center justify-center" 
+      style={{ 
+        backgroundImage: `url('/images/login-bg.svg')`
+      }}>
       <LoginForm
+        className="bg-white/90 p-5 rounded-lg backdrop-blur-sm min-w-[320px]"
         title="系统登录"
         onFinish={handleSubmit}
         loading={loading}
