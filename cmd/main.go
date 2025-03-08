@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/azel-ko/final-ddd/internal/infrastructure/cache"
 	"github.com/azel-ko/final-ddd/internal/infrastructure/migration"
 	"github.com/azel-ko/final-ddd/internal/infrastructure/persistence"
@@ -11,7 +14,6 @@ import (
 	migr "github.com/azel-ko/final-ddd/pkg/database/migration"
 	"github.com/azel-ko/final-ddd/pkg/logger"
 	"go.uber.org/zap"
-	"log"
 )
 
 func main() {
@@ -33,7 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
-
+	strings.Fields("hello world")
 	// 初始化数据库连接
 	repo, db, err := persistence.NewRepository(cfg)
 	if err != nil {
