@@ -1,5 +1,5 @@
 # 构建阶段
-FROM node:18-alpine as builder
+FROM docker.1ms.run/node:18-alpine as builder
 WORKDIR /app
 
 # 安装 pnpm
@@ -18,7 +18,7 @@ COPY . .
 RUN pnpm build
 
 # 运行阶段
-FROM nginx:alpine
+FROM docker.1ms.run/nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
