@@ -15,7 +15,7 @@ RUN pnpm install
 COPY . .
 
 # 构建
-RUN pnpm build
+RUN CI=true pnpm build || (cat /root/.local/share/pnpm/store/v3/log/* && exit 1)
 
 # 运行阶段
 FROM docker.1ms.run/nginx:alpine
