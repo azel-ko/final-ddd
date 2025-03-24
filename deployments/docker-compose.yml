@@ -52,7 +52,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.frontend.priority=1"
       - "traefik.http.routers.frontend.tls.certresolver=leresolver"
     networks:
       - app_network
@@ -205,8 +206,10 @@ services:
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.services.app.loadbalancer.server.port=9999"
       - "traefik.http.routers.app.rule=PathPrefix(`/app`)"
-      - "traefik.http.middlewares.app_strip.stripprefix.prefixes=/app"
-      - "traefik.http.routers.app.middlewares=app_strip"
+      # 只去掉 /app 前缀,保留 /api
+      - "traefik.http.middlewares.app-strip.stripprefix.prefixes=/app"
+      - "traefik.http.routers.app.middlewares=app-strip@docker"
+      - "traefik.http.routers.app.priority=2"
       - "traefik.http.routers.app.tls.certresolver=leresolver"
     networks:
       - app_network

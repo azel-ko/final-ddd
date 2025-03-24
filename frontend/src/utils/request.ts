@@ -2,7 +2,7 @@ import axios from 'axios'
 import { handleApiError } from './errorHandler'
 
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: '/app/api',  // 修改为 /app/api 前缀
   timeout: 5000, // 降低超时时间，以便更快感知错误
 })
 
