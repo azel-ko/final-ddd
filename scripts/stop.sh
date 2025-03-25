@@ -1,1 +1,2 @@
- docker-compose -f ../deployments/docker-compose.yml down $1
+#!/bin/bash
+python3 setup.py stop

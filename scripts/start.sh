@@ -1,1 +1,2 @@
-python3 setup.py
+#!/bin/bash
+python3 setup.py start

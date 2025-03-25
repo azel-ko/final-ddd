@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"net/http"
+
 	"github.com/azel-ko/final-ddd/internal/application/dto"
 	"github.com/azel-ko/final-ddd/internal/application/services"
 	"github.com/azel-ko/final-ddd/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type AuthHandler struct {

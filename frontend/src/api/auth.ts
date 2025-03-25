@@ -1,8 +1,28 @@
 import request from '@/utils/request'
-import type { LoginRequest, LoginResponse, RegisterRequest } from '@/types/user'
 
-export const login = (data: LoginRequest) => 
-  request.post<any, LoginResponse>('/auth/login', data)
+interface LoginParams {
+  email: string
+  password: string
+}
 
-export const register = (data: RegisterRequest) =>
-  request.post<any, LoginResponse>('/auth/register', data)
+interface RegisterParams {
+  username: string
+  password: string
+  email: string
+}
+
+export function login(data: LoginParams) {
+  return request({
+    url: '/auth/login',
+    method: 'post',
+    data,
+  })
+}
+
+export function register(data: RegisterParams) {
+  return request({
+    url: '/auth/register',
+    method: 'post',
+    data,
+  })
+}

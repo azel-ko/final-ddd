@@ -7,6 +7,7 @@ import Login from './pages/login'
 import Users from './pages/users'
 import Dashboard from './pages/dashboard'
 import './App.css'
+import Register from "@/pages/Register.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,10 @@ const router = createBrowserRouter([
         element: <Users />,
       },
     ],
+  },
+  {
+      path: '/register',
+      element: <Register />,
   },
 ])
 

@@ -4,7 +4,7 @@ import sys
 import subprocess
 
 # 获取配置文件路径
-config_file = sys.argv[1] if len(sys.argv) > 1 else "../configs/config.yml"
+config_file = sys.argv[2] if len(sys.argv) > 2 else "../configs/config.yml"
 
 # 读取配置文件
 try:
@@ -35,5 +35,12 @@ for key in os.environ:
     if key.startswith('DATABASE_') or key.startswith('DB_') or key.startswith('REDIS_'):
         print(f"{key}={os.environ[key]}")
 
-# 如果需要执行 docker-compose
-subprocess.run(["docker-compose","--profile", database.get('type', ''), "-f", "../deployments/docker-compose.yml", "up", "--build", "-d"])
+# 根据命令行参数决定是启动还是停止服务
+if sys.argv[1] == "start":
+    # 如果需要执行 docker-compose
+    subprocess.run(["docker", "compose", "--profile", database.get('type', ''), "-f", "../deployments/docker-compose.yml", "up", "--build", "-d"]) # 每次打包 ,
+elif sys.argv[1] == "stop":
+    subprocess.run(["docker", "compose", "-f", "../deployments/docker-compose.yml", "down"])
+else:
+    print("Usage: setup.py [start|stop] [config_file]")
+    sys.exit(1)

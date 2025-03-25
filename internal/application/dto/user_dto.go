@@ -6,14 +6,14 @@ import (
 )
 
 type UserRequest struct {
-	Name     string `json:"name" binding:"required"`
+	Name     string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
 type UserResponse struct {
 	ID    uint   `json:"id"`
-	Name  string `json:"name"`
+	Name  string `json:"username"`
 	Email string `json:"email"`
 }
 
