@@ -2,6 +2,12 @@ job "registry" {
   datacenters = ["dc1"]
   type = "service"
 
+  # 固定在一个节点上运行
+  constraint {
+    attribute = "${node.unique.name}"
+    value     = "n1"  # 替换为您想要运行 Registry 的节点名称
+  }
+
   group "registry" {
     count = 1
 
@@ -30,6 +36,8 @@ job "registry" {
       }
     }
 
+    # 不再需要预启动任务
+
     task "registry" {
       driver = "docker"
 
@@ -39,17 +47,15 @@ job "registry" {
         force_pull = false
         ports = ["registry"]
         volumes = [
-          "local/registry:/var/lib/registry"
+          "/opt/data/registry:/var/lib/registry"
         ]
       }
 
-      # 创建持久化目录
-      template {
-        data = ""
-        destination = "local/registry/.gitkeep"
-      }
+      # 不再需要创建持久化目录的模板
 
       env {
+        # 使用文件系统存储
+        REGISTRY_STORAGE = "filesystem"
         REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY = "/var/lib/registry"
         # 允许使用不安全的 HTTP 连接，简化开发环境配置
         # 生产环境应该配置 TLS

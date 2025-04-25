@@ -217,36 +217,40 @@ build_images() {
 # 创建必要的卷
 create_volumes() {
   if [ "$CLUSTER_MODE" = "true" ]; then
-    echo -e "${YELLOW}集群模式下，卷需要在每个 Nomad 客户端上创建.${NC}"
-    echo -e "${YELLOW}请确保所有 Nomad 客户端上都有以下卷:${NC}"
-    echo "mysql_data, postgres_data, sqlite_data, redis_data, rabbitmq_data, prometheus_data, grafana_data, traefik_logs, app_log_data"
+    echo -e "${YELLOW}集群模式下，需要在每个 Nomad 客户端上创建数据目录.${NC}"
+    echo -e "${YELLOW}请确保所有 Nomad 客户端上都有以下目录:${NC}"
+    echo "/opt/data/postgres"
+    echo "/opt/data/redis"
+    echo "/opt/data/rabbitmq"
+    echo "/opt/data/prometheus"
+    echo "/opt/data/grafana"
+    echo "/opt/data/traefik"
+    echo "/opt/data/app"
+    echo "/opt/data/registry (仅在运行 Registry 的节点上需要)"
     return
   fi
 
-  echo -e "${YELLOW}创建 Docker 卷...${NC}"
+  echo -e "${YELLOW}创建数据目录...${NC}"
 
-  volumes=(
-    "mysql_data"
-    "postgres_data"
-    "sqlite_data"
-    "redis_data"
-    "rabbitmq_data"
-    "prometheus_data"
-    "grafana_data"
-    "traefik_logs"
-    "app_log_data"
-  )
+  # 不再使用 Docker 卷，而是使用 /opt/data 目录
+  # 确保 /opt/data 目录存在
+  if ! sudo mkdir -p /opt/data/{postgres,redis,rabbitmq,prometheus,grafana,traefik,app,registry}; then
+    echo -e "${RED}错误: 无法创建 /opt/data 目录.${NC}"
+    echo "请手动创建以下目录并确保有适当的权限:"
+    echo "/opt/data/postgres"
+    echo "/opt/data/redis"
+    echo "/opt/data/rabbitmq"
+    echo "/opt/data/prometheus"
+    echo "/opt/data/grafana"
+    echo "/opt/data/traefik"
+    echo "/opt/data/app"
+    echo "/opt/data/registry"
+  else
+    sudo chmod -R 777 /opt/data
+    echo -e "${GREEN}已创建数据目录.${NC}"
+  fi
 
-  for volume in "${volumes[@]}"; do
-    if ! docker volume inspect "$volume" &> /dev/null; then
-      echo "创建卷: $volume"
-      docker volume create "$volume"
-    else
-      echo "卷已存在: $volume"
-    fi
-  done
-
-  echo -e "${GREEN}卷创建完成.${NC}"
+  echo -e "${GREEN}目录创建完成.${NC}"
 }
 
 # 部署单个 Nomad 作业
@@ -297,11 +301,10 @@ deploy_nomad_jobs() {
   export NOMAD_ADDR=$NOMAD_ADDR
   export CONSUL_HTTP_ADDR=$CONSUL_ADDR
   export DOMAIN_NAME=$DOMAIN_NAME
-  export DATABASE_SERVICE=${DATABASE_SERVICE:-mysql}
+  export DATABASE_SERVICE="postgres"  # 固定使用 PostgreSQL
   export DB_NAME=${DB_NAME:-app}
   export DB_USER=${DB_USER:-user}
   export DB_PASSWORD=${DB_PASSWORD:-password}
-  export DB_PATH=${DB_PATH:-./sqlite_data}
   export REDIS_PASSWORD=${REDIS_PASSWORD:-password}
   export RABBITMQ_USER=${RABBITMQ_USER:-admin}
   export RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
@@ -312,7 +315,7 @@ deploy_nomad_jobs() {
   echo "Nomad 地址: $NOMAD_ADDR"
   echo "Consul 地址: $CONSUL_HTTP_ADDR"
   echo "域名: $DOMAIN_NAME"
-  echo "数据库服务: $DATABASE_SERVICE"
+  echo "数据库服务: PostgreSQL"
   echo "异步部署模式: $ASYNC_DEPLOY"
 
   if [ "$ASYNC_DEPLOY" = "true" ]; then

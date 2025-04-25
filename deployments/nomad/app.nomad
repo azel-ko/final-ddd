@@ -41,7 +41,7 @@ job "app" {
         image = "${APP_IMAGE}"
         ports = ["http"]
         volumes = [
-          "local/logs:/app/logs"
+          "/opt/data/app:/app/logs"
         ]
         # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
@@ -51,7 +51,7 @@ job "app" {
       template {
         data = <<EOF
 # 服务发现配置
-MYSQL_ADDR={{ range service "mysql" }}{{ .Address }}:{{ .Port }}{{ end }}
+POSTGRES_ADDR={{ range service "postgres" }}{{ .Address }}:{{ .Port }}{{ end }}
 REDIS_ADDR={{ range service "redis" }}{{ .Address }}:{{ .Port }}{{ end }}
 RABBITMQ_ADDR={{ range service "rabbitmq" }}{{ .Address }}:{{ .Port }}{{ end }}
 EOF

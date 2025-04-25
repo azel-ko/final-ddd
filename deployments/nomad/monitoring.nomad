@@ -39,7 +39,7 @@ job "monitoring" {
         force_pull = false
         volumes = [
           "local/prometheus.yml:/etc/prometheus/prometheus.yml",
-          "prometheus_data:/prometheus"
+          "/opt/data/prometheus:/prometheus"
         ]
       }
 
@@ -73,11 +73,7 @@ EOF
       }
     }
 
-    volume "prometheus_data" {
-      type      = "host"
-      source    = "prometheus_data"
-      read_only = false
-    }
+    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 
   group "grafana" {
@@ -116,7 +112,7 @@ EOF
         # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
         volumes = [
-          "grafana_data:/var/lib/grafana",
+          "/opt/data/grafana:/var/lib/grafana",
           "local/provisioning:/etc/grafana/provisioning"
         ]
       }
@@ -146,10 +142,6 @@ EOF
       }
     }
 
-    volume "grafana_data" {
-      type      = "host"
-      source    = "grafana_data"
-      read_only = false
-    }
+    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }

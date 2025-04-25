@@ -41,7 +41,7 @@ job "rabbitmq" {
         # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
         volumes = [
-          "rabbitmq_data:/var/lib/rabbitmq"
+          "/opt/data/rabbitmq:/var/lib/rabbitmq"
         ]
       }
 
@@ -56,10 +56,6 @@ job "rabbitmq" {
       }
     }
 
-    volume "rabbitmq_data" {
-      type      = "host"
-      source    = "rabbitmq_data"
-      read_only = false
-    }
+    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }

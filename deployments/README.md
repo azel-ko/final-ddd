@@ -84,15 +84,14 @@ export DOCKER_REGISTRY=your-registry.com
 
 #### Registry 数据存储
 
-本地镜像仓库的数据存储在 Nomad 分配的目录中，您不需要手动创建任何目录。
+本地镜像仓库使用内存存储，这意味着如果 Registry 容器重启，存储的镜像将会丢失。这对于临时使用的本地镜像仓库来说通常是可以接受的，但如果您需要持久化存储，可能需要修改 registry.nomad 文件，配置持久化存储。
 
 #### 注意事项
 
 使用本地镜像仓库时，您需要确保：
 
 1. 所有 Nomad 客户端都能够访问这个仓库
-2. 所有 Nomad 客户端上都有 `/var/lib/nomad/registry_data` 目录，并且有适当的权限
-3. 如果仓库使用的是自签名证书，您可能需要在所有 Nomad 客户端上配置 Docker 信任这个证书
+2. 如果仓库使用的是自签名证书，您可能需要在所有 Nomad 客户端上配置 Docker 信任这个证书
 
 ## DNS 配置
 
@@ -122,18 +121,18 @@ export DOCKER_REGISTRY=your-registry.com
 
 ## 持久化存储
 
-在集群环境中，您需要确保所有 Nomad 客户端上都有以下 Docker 卷：
+在集群环境中，您需要确保所有 Nomad 客户端上都有以下目录：
 
-- mysql_data
-- postgres_data
-- sqlite_data
-- redis_data
-- rabbitmq_data
-- prometheus_data
-- grafana_data
-- traefik_logs
-- app_log_data
-- registry_data (如果使用本地镜像仓库)
+- /opt/data/postgres - PostgreSQL 数据目录
+- /opt/data/redis - Redis 数据目录
+- /opt/data/rabbitmq - RabbitMQ 数据目录
+- /opt/data/prometheus - Prometheus 数据目录
+- /opt/data/grafana - Grafana 数据目录
+- /opt/data/traefik - Traefik 日志目录
+- /opt/data/app - 应用日志目录
+- /opt/data/registry - Registry 数据目录（仅在运行 Registry 的节点上需要）
+
+所有服务的数据都统一存储在 `/opt/data/` 目录下，这样可以减少卷挂载问题，并且便于管理。
 
 对于生产环境，建议使用网络存储解决方案（如 NFS、Ceph 等）来确保数据的持久性和一致性。
 

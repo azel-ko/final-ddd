@@ -31,7 +31,7 @@ job "redis" {
         # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
         volumes = [
-          "redis_data:/data"
+          "/opt/data/redis:/data"
         ]
         args = ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
       }
@@ -42,10 +42,6 @@ job "redis" {
       }
     }
 
-    volume "redis_data" {
-      type      = "host"
-      source    = "redis_data"
-      read_only = false
-    }
+    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }
