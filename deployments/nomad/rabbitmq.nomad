@@ -38,6 +38,8 @@ job "rabbitmq" {
       config {
         image = "docker.1ms.run/rabbitmq:4-management"
         ports = ["amqp", "management"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "rabbitmq_data:/var/lib/rabbitmq"
         ]

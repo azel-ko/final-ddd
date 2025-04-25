@@ -35,6 +35,8 @@ job "monitoring" {
       config {
         image = "docker.1ms.run/prom/prometheus:latest"
         ports = ["prometheus_ui"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "local/prometheus.yml:/etc/prometheus/prometheus.yml",
           "prometheus_data:/prometheus"
@@ -111,6 +113,8 @@ EOF
       config {
         image = "docker.1ms.run/grafana/grafana:latest"
         ports = ["grafana_ui"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "grafana_data:/var/lib/grafana",
           "local/provisioning:/etc/grafana/provisioning"

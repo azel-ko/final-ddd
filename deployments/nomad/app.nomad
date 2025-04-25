@@ -38,11 +38,13 @@ job "app" {
       driver = "docker"
 
       config {
-        image = "go-app:latest"
+        image = "${APP_IMAGE}"
         ports = ["http"]
         volumes = [
           "local/logs:/app/logs"
         ]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
       }
 
       # 使用模板获取服务地址

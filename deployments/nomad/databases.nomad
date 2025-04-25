@@ -28,6 +28,8 @@ job "databases" {
       config {
         image = "docker.1ms.run/mysql:8.0"
         ports = ["mysql"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "mysql_data:/var/lib/mysql",
           "local/my.cnf:/etc/mysql/my.cnf"
@@ -90,6 +92,8 @@ EOF
       config {
         image = "docker.1ms.run/postgres:14"
         ports = ["postgres"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "postgres_data:/var/lib/postgresql/data"
         ]
@@ -123,6 +127,8 @@ EOF
 
       config {
         image = "docker.1ms.run/alpine:latest"
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "sqlite_data:/data",
           "${DB_PATH}:/data/external"

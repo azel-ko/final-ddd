@@ -12,6 +12,11 @@ NOMAD_ADDR=${NOMAD_ADDR:-"http://localhost:4646"}
 CONSUL_ADDR=${CONSUL_ADDR:-"http://localhost:8500"}
 DOMAIN_NAME=${DOMAIN_NAME:-"example.com"}
 CLUSTER_MODE=${CLUSTER_MODE:-"false"}
+FORCE_BUILD=${FORCE_BUILD:-"false"}
+ASYNC_DEPLOY=${ASYNC_DEPLOY:-"false"}
+WAIT_TIMEOUT=${WAIT_TIMEOUT:-60}
+USE_LOCAL_REGISTRY=${USE_LOCAL_REGISTRY:-"false"}
+LOCAL_REGISTRY_ADDR=${LOCAL_REGISTRY_ADDR:-"registry.${DOMAIN_NAME}:5000"}
 
 # 显示帮助信息
 show_help() {
@@ -23,6 +28,11 @@ show_help() {
   echo "  -c, --consul-addr ADDR    设置 Consul 地址 (默认: http://localhost:8500)"
   echo "  -d, --domain DOMAIN       设置应用域名 (默认: example.com)"
   echo "  --cluster                 启用集群模式 (默认: 禁用)"
+  echo "  --force-build             强制重新构建镜像 (默认: 禁用)"
+  echo "  --async                   异步部署模式，不等待服务健康 (默认: 禁用)"
+  echo "  --wait-timeout SECONDS    等待服务健康的超时时间 (默认: 60秒)"
+  echo "  --use-local-registry      使用本地镜像仓库 (默认: 禁用)"
+  echo "  --registry-addr ADDR      设置本地镜像仓库地址 (默认: registry.DOMAIN_NAME:5000)"
   echo "  --database SERVICE        设置数据库服务 (mysql, postgres, sqlite) (默认: mysql)"
   echo "  --db-name NAME            设置数据库名称 (默认: app)"
   echo "  --db-user USER            设置数据库用户 (默认: user)"
@@ -53,6 +63,26 @@ parse_args() {
       --cluster)
         CLUSTER_MODE="true"
         shift
+        ;;
+      --force-build)
+        FORCE_BUILD="true"
+        shift
+        ;;
+      --async)
+        ASYNC_DEPLOY="true"
+        shift
+        ;;
+      --wait-timeout)
+        WAIT_TIMEOUT="$2"
+        shift 2
+        ;;
+      --use-local-registry)
+        USE_LOCAL_REGISTRY="true"
+        shift
+        ;;
+      --registry-addr)
+        LOCAL_REGISTRY_ADDR="$2"
+        shift 2
         ;;
       --database)
         DATABASE_SERVICE="$2"
@@ -104,33 +134,88 @@ check_dependencies() {
   echo -e "${GREEN}所有依赖已安装.${NC}"
 }
 
+# 检查镜像是否存在
+check_image_exists() {
+  local image_name=$1
+  if docker image inspect "$image_name" &> /dev/null; then
+    return 0  # 镜像存在
+  else
+    return 1  # 镜像不存在
+  fi
+}
+
 # 构建应用镜像
 build_images() {
-  echo -e "${YELLOW}构建应用镜像...${NC}"
+  echo -e "${YELLOW}检查应用镜像...${NC}"
 
-  # 构建主应用镜像
-  echo "构建主应用镜像..."
-  docker build -t go-app:latest -f Dockerfile .
+  local app_image="go-app:latest"
+  local frontend_image="frontend:latest"
+  local need_build_app=false
+  local need_build_frontend=false
 
-  # 构建前端镜像
-  echo "构建前端镜像..."
-  docker build -t frontend:latest -f frontend/Dockerfile frontend
+  # 检查主应用镜像是否存在
+  if check_image_exists "$app_image"; then
+    echo "主应用镜像已存在，跳过构建"
+  else
+    need_build_app=true
+  fi
 
-  # 如果是集群模式，推送镜像到镜像仓库
-  if [ "$CLUSTER_MODE" = "true" ]; then
+  # 检查前端镜像是否存在
+  if check_image_exists "$frontend_image"; then
+    echo "前端镜像已存在，跳过构建"
+  else
+    need_build_frontend=true
+  fi
+
+  # 如果需要，构建主应用镜像
+  if [ "$need_build_app" = true ] || [ "$FORCE_BUILD" = "true" ]; then
+    echo -e "${YELLOW}构建主应用镜像...${NC}"
+    docker build -t "$app_image" -f ../Dockerfile ..
+  fi
+
+  # 如果需要，构建前端镜像
+  if [ "$need_build_frontend" = true ] || [ "$FORCE_BUILD" = "true" ]; then
+    echo -e "${YELLOW}构建前端镜像...${NC}"
+    docker build -t "$frontend_image" -f ../frontend/Dockerfile ../frontend
+  fi
+
+  # 推送镜像到仓库
+  if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
+    echo "推送镜像到本地仓库: $LOCAL_REGISTRY_ADDR"
+    docker tag "$app_image" "$LOCAL_REGISTRY_ADDR/go-app:latest"
+    docker tag "$frontend_image" "$LOCAL_REGISTRY_ADDR/frontend:latest"
+    docker push "$LOCAL_REGISTRY_ADDR/go-app:latest"
+    docker push "$LOCAL_REGISTRY_ADDR/frontend:latest"
+
+    # 更新镜像名称以在 Nomad 作业中使用
+    export APP_IMAGE="$LOCAL_REGISTRY_ADDR/go-app:latest"
+    export FRONTEND_IMAGE="$LOCAL_REGISTRY_ADDR/frontend:latest"
+  elif [ "$CLUSTER_MODE" = "true" ]; then
     if [ -z "$DOCKER_REGISTRY" ]; then
       echo -e "${YELLOW}警告: 集群模式下未指定 Docker 镜像仓库地址，将使用本地镜像.${NC}"
       echo -e "${YELLOW}如果 Nomad 客户端无法访问本地镜像，部署可能会失败.${NC}"
+
+      # 使用默认镜像名称
+      export APP_IMAGE="go-app:latest"
+      export FRONTEND_IMAGE="frontend:latest"
     else
       echo "推送镜像到仓库: $DOCKER_REGISTRY"
-      docker tag go-app:latest $DOCKER_REGISTRY/go-app:latest
-      docker tag frontend:latest $DOCKER_REGISTRY/frontend:latest
-      docker push $DOCKER_REGISTRY/go-app:latest
-      docker push $DOCKER_REGISTRY/frontend:latest
+      docker tag "$app_image" "$DOCKER_REGISTRY/go-app:latest"
+      docker tag "$frontend_image" "$DOCKER_REGISTRY/frontend:latest"
+      docker push "$DOCKER_REGISTRY/go-app:latest"
+      docker push "$DOCKER_REGISTRY/frontend:latest"
+
+      # 更新镜像名称以在 Nomad 作业中使用
+      export APP_IMAGE="$DOCKER_REGISTRY/go-app:latest"
+      export FRONTEND_IMAGE="$DOCKER_REGISTRY/frontend:latest"
     fi
+  else
+    # 使用默认镜像名称
+    export APP_IMAGE="go-app:latest"
+    export FRONTEND_IMAGE="frontend:latest"
   fi
 
-  echo -e "${GREEN}镜像构建完成.${NC}"
+  echo -e "${GREEN}镜像准备完成.${NC}"
 }
 
 # 创建必要的卷
@@ -168,6 +253,46 @@ create_volumes() {
   echo -e "${GREEN}卷创建完成.${NC}"
 }
 
+# 部署单个 Nomad 作业
+deploy_job() {
+  local job_file=$1
+  local job_name=$(basename "$job_file" .nomad)
+
+  echo "部署 ${job_name}..."
+
+  if [ "$ASYNC_DEPLOY" = "true" ]; then
+    # 异步部署，不等待服务健康
+    nomad job run -detach "$job_file"
+    echo "已提交作业 ${job_name}，继续部署下一个服务..."
+  else
+    # 同步部署，等待服务健康
+    if ! nomad job run "$job_file"; then
+      echo -e "${RED}部署 ${job_name} 失败.${NC}"
+      return 1
+    fi
+
+    # 等待服务健康
+    echo "等待 ${job_name} 服务健康检查通过 (最多 ${WAIT_TIMEOUT} 秒)..."
+    local start_time=$(date +%s)
+    local current_time=0
+    local timeout_seconds=$WAIT_TIMEOUT
+
+    while [ $((current_time - start_time)) -lt $timeout_seconds ]; do
+      # 检查作业状态
+      if nomad job status "$job_name" | grep -q "running"; then
+        echo -e "${GREEN}${job_name} 服务已启动.${NC}"
+        return 0
+      fi
+
+      echo "等待 ${job_name} 服务启动..."
+      sleep 5
+      current_time=$(date +%s)
+    done
+
+    echo -e "${YELLOW}警告: ${job_name} 服务启动超时，但将继续部署其他服务.${NC}"
+  fi
+}
+
 # 部署 Nomad 作业
 deploy_nomad_jobs() {
   echo -e "${YELLOW}部署 Nomad 作业...${NC}"
@@ -192,36 +317,52 @@ deploy_nomad_jobs() {
   echo "Consul 地址: $CONSUL_HTTP_ADDR"
   echo "域名: $DOMAIN_NAME"
   echo "数据库服务: $DATABASE_SERVICE"
+  echo "异步部署模式: $ASYNC_DEPLOY"
+
+  if [ "$ASYNC_DEPLOY" = "true" ]; then
+    echo "服务将在后台部署，不等待健康检查"
+  else
+    echo "等待服务健康的超时时间: ${WAIT_TIMEOUT}秒"
+  fi
+
+  if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
+    echo "使用本地镜像仓库: $LOCAL_REGISTRY_ADDR"
+    echo "应用镜像: $APP_IMAGE"
+    echo "前端镜像: $FRONTEND_IMAGE"
+  fi
+
+  # 如果使用本地镜像仓库，先部署 Registry
+  if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
+    echo "部署本地镜像仓库..."
+    deploy_job "nomad/registry.nomad"
+  fi
 
   # 部署 Traefik
-  echo "部署 Traefik..."
-  nomad job run deployments/nomad/traefik.nomad
+  deploy_job "nomad/traefik.nomad"
 
   # 部署数据库
-  echo "部署数据库..."
-  nomad job run deployments/nomad/databases.nomad
+  deploy_job "nomad/databases.nomad"
 
   # 部署 Redis
-  echo "部署 Redis..."
-  nomad job run deployments/nomad/redis.nomad
+  deploy_job "nomad/redis.nomad"
 
   # 部署 RabbitMQ
-  echo "部署 RabbitMQ..."
-  nomad job run deployments/nomad/rabbitmq.nomad
+  deploy_job "nomad/rabbitmq.nomad"
 
   # 部署监控
-  echo "部署监控服务..."
-  nomad job run deployments/nomad/monitoring.nomad
+  deploy_job "nomad/monitoring.nomad"
 
   # 部署主应用
-  echo "部署主应用..."
-  nomad job run deployments/nomad/app.nomad
+  deploy_job "nomad/app.nomad"
 
   # 部署前端
-  echo "部署前端..."
-  nomad job run deployments/nomad/frontend.nomad
+  deploy_job "nomad/frontend.nomad"
 
-  echo -e "${GREEN}所有 Nomad 作业已部署.${NC}"
+  echo -e "${GREEN}所有 Nomad 作业已提交.${NC}"
+
+  if [ "$ASYNC_DEPLOY" = "true" ]; then
+    echo -e "${YELLOW}注意: 服务正在后台部署，请使用 Nomad UI 或 'nomad job status' 命令检查部署状态.${NC}"
+  fi
 }
 
 # 检查服务状态

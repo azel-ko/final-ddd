@@ -36,8 +36,10 @@ job "frontend" {
       driver = "docker"
 
       config {
-        image = "frontend:latest"
+        image = "${FRONTEND_IMAGE}"
         ports = ["http"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
       }
 
       # 使用模板获取后端服务地址

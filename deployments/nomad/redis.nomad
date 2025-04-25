@@ -28,6 +28,8 @@ job "redis" {
       config {
         image = "docker.1ms.run/redis:7.0"
         ports = ["redis"]
+        # 告诉 Nomad 不要从远程仓库拉取镜像
+        force_pull = false
         volumes = [
           "redis_data:/data"
         ]
