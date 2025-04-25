@@ -1,0 +1,110 @@
+# Nomad + Consul 部署指南
+
+本指南将帮助您使用 Nomad 和 Consul 部署应用程序。
+
+## 前提条件
+
+- 已安装 Nomad（版本 1.0.0 或更高）
+- 已安装 Consul（版本 1.9.0 或更高）
+- 已安装 Docker
+- 如果使用集群模式，需要有可用的 Docker 镜像仓库
+
+## 部署架构
+
+该部署方案使用以下组件：
+
+- **Nomad**：用于编排和调度容器
+- **Consul**：用于服务发现和健康检查
+- **Traefik**：作为反向代理和负载均衡器
+- **MySQL/PostgreSQL/SQLite**：数据库服务
+- **Redis**：缓存服务
+- **RabbitMQ**：消息队列服务
+- **Prometheus + Grafana**：监控系统
+
+## 单机部署
+
+对于单机部署，您可以直接运行部署脚本：
+
+```bash
+./deploy.sh -d your-domain.com
+```
+
+## 集群部署
+
+对于集群部署，您需要：
+
+1. 确保 Nomad 和 Consul 集群已经正确配置
+2. 确保所有 Nomad 客户端上都有必要的 Docker 卷
+3. 使用 `--cluster` 参数运行部署脚本
+
+```bash
+./deploy.sh -d your-domain.com --cluster -n http://nomad-server:4646 -c http://consul-server:8500
+```
+
+如果您使用私有 Docker 镜像仓库，请设置 `DOCKER_REGISTRY` 环境变量：
+
+```bash
+export DOCKER_REGISTRY=your-registry.com
+./deploy.sh -d your-domain.com --cluster
+```
+
+## DNS 配置
+
+要使外部机器能够通过域名访问您的应用，您需要：
+
+1. 确保您的域名 DNS 记录指向 Traefik 服务所在的节点 IP 地址
+2. 如果使用多个节点运行 Traefik，请考虑使用外部负载均衡器
+
+## 脚本参数
+
+`deploy.sh` 脚本支持以下参数：
+
+- `-h, --help`：显示帮助信息
+- `-n, --nomad-addr ADDR`：设置 Nomad 地址（默认：http://localhost:4646）
+- `-c, --consul-addr ADDR`：设置 Consul 地址（默认：http://localhost:8500）
+- `-d, --domain DOMAIN`：设置应用域名（默认：example.com）
+- `--cluster`：启用集群模式
+- `--database SERVICE`：设置数据库服务（mysql, postgres, sqlite）（默认：mysql）
+- `--db-name NAME`：设置数据库名称（默认：app）
+- `--db-user USER`：设置数据库用户（默认：user）
+- `--db-password PASSWORD`：设置数据库密码（默认：password）
+
+## 持久化存储
+
+在集群环境中，您需要确保所有 Nomad 客户端上都有以下 Docker 卷：
+
+- mysql_data
+- postgres_data
+- sqlite_data
+- redis_data
+- rabbitmq_data
+- prometheus_data
+- grafana_data
+- traefik_logs
+- app_log_data
+
+对于生产环境，建议使用网络存储解决方案（如 NFS、Ceph 等）来确保数据的持久性和一致性。
+
+## 安全注意事项
+
+对于生产环境，您应该：
+
+1. 启用 Consul 和 Nomad 的 ACL 系统
+2. 使用 TLS 加密通信
+3. 使用安全的密码和凭证
+4. 限制对 Nomad 和 Consul API 的访问
+
+## 故障排除
+
+如果您遇到问题，请检查：
+
+1. Nomad 和 Consul 日志
+2. 容器日志
+3. 网络连接和防火墙设置
+4. DNS 配置
+
+## 更多资源
+
+- [Nomad 文档](https://www.nomadproject.io/docs)
+- [Consul 文档](https://www.consul.io/docs)
+- [Traefik 文档](https://doc.traefik.io/traefik/)
