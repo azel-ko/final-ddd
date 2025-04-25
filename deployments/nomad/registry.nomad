@@ -14,17 +14,17 @@ job "registry" {
     service {
       name = "registry"
       port = "registry"
-      
+
       tags = [
         "traefik.enable=true",
-        "traefik.http.routers.registry.entrypoints=websecure",
-        "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN_NAME}`)",
-        "traefik.http.routers.registry.tls.certresolver=leresolver"
+        "traefik.http.routers.registry.entrypoints=web",
+        "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN_NAME}`)"
       ]
 
       check {
-        type     = "http"
-        path     = "/v2/"
+        name     = "alive"
+        type     = "tcp"
+        port     = "registry"
         interval = "10s"
         timeout  = "2s"
       }
@@ -39,8 +39,14 @@ job "registry" {
         force_pull = false
         ports = ["registry"]
         volumes = [
-          "registry_data:/var/lib/registry"
+          "local/registry:/var/lib/registry"
         ]
+      }
+
+      # 创建持久化目录
+      template {
+        data = ""
+        destination = "local/registry/.gitkeep"
       }
 
       env {
@@ -58,10 +64,6 @@ job "registry" {
       }
     }
 
-    volume "registry_data" {
-      type      = "host"
-      source    = "registry_data"
-      read_only = false
-    }
+    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }

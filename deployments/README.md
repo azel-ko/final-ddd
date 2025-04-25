@@ -82,7 +82,17 @@ export DOCKER_REGISTRY=your-registry.com
 ./deploy.sh -d your-domain.com --cluster --use-local-registry --registry-addr registry.example.com:5000
 ```
 
-注意：使用本地镜像仓库时，您需要确保所有 Nomad 客户端都能够访问这个仓库。如果仓库使用的是自签名证书，您可能需要在所有 Nomad 客户端上配置 Docker 信任这个证书。
+#### Registry 数据存储
+
+本地镜像仓库的数据存储在 Nomad 分配的目录中，您不需要手动创建任何目录。
+
+#### 注意事项
+
+使用本地镜像仓库时，您需要确保：
+
+1. 所有 Nomad 客户端都能够访问这个仓库
+2. 所有 Nomad 客户端上都有 `/var/lib/nomad/registry_data` 目录，并且有适当的权限
+3. 如果仓库使用的是自签名证书，您可能需要在所有 Nomad 客户端上配置 Docker 信任这个证书
 
 ## DNS 配置
 

@@ -179,17 +179,13 @@ build_images() {
     docker build -t "$frontend_image" -f ../frontend/Dockerfile ../frontend
   fi
 
-  # 推送镜像到仓库
+  # 如果使用本地镜像仓库，先设置镜像名称
   if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
-    echo "推送镜像到本地仓库: $LOCAL_REGISTRY_ADDR"
-    docker tag "$app_image" "$LOCAL_REGISTRY_ADDR/go-app:latest"
-    docker tag "$frontend_image" "$LOCAL_REGISTRY_ADDR/frontend:latest"
-    docker push "$LOCAL_REGISTRY_ADDR/go-app:latest"
-    docker push "$LOCAL_REGISTRY_ADDR/frontend:latest"
-
-    # 更新镜像名称以在 Nomad 作业中使用
+    # 设置镜像名称
     export APP_IMAGE="$LOCAL_REGISTRY_ADDR/go-app:latest"
     export FRONTEND_IMAGE="$LOCAL_REGISTRY_ADDR/frontend:latest"
+
+    # 注意：镜像推送将在部署本地镜像仓库后进行
   elif [ "$CLUSTER_MODE" = "true" ]; then
     if [ -z "$DOCKER_REGISTRY" ]; then
       echo -e "${YELLOW}警告: 集群模式下未指定 Docker 镜像仓库地址，将使用本地镜像.${NC}"
@@ -335,6 +331,36 @@ deploy_nomad_jobs() {
   if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
     echo "部署本地镜像仓库..."
     deploy_job "nomad/registry.nomad"
+
+    # 等待本地镜像仓库可用
+    echo "等待本地镜像仓库可用..."
+    local registry_ready=false
+    local start_time=$(date +%s)
+    local current_time=0
+    local timeout_seconds=60
+
+    while [ $((current_time - start_time)) -lt $timeout_seconds ]; do
+      if curl -s "http://$LOCAL_REGISTRY_ADDR/v2/" > /dev/null 2>&1; then
+        registry_ready=true
+        break
+      fi
+      echo "等待本地镜像仓库启动..."
+      sleep 5
+      current_time=$(date +%s)
+    done
+
+    if [ "$registry_ready" = true ]; then
+      echo -e "${GREEN}本地镜像仓库已启动.${NC}"
+
+      # 推送镜像到本地仓库
+      echo "推送镜像到本地仓库: $LOCAL_REGISTRY_ADDR"
+      docker tag "$app_image" "$LOCAL_REGISTRY_ADDR/go-app:latest"
+      docker tag "$frontend_image" "$LOCAL_REGISTRY_ADDR/frontend:latest"
+      docker push "$LOCAL_REGISTRY_ADDR/go-app:latest"
+      docker push "$LOCAL_REGISTRY_ADDR/frontend:latest"
+    else
+      echo -e "${YELLOW}警告: 本地镜像仓库启动超时，将使用本地镜像.${NC}"
+    fi
   fi
 
   # 部署 Traefik
