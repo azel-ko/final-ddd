@@ -5,11 +5,11 @@ app:
   env: release #, debug # or release, test
 
 database:
-  type: mysql # or postgres, sqlite
-  user: root
-  password: newroot
-  host: mysql
-  port: 3306
+  type: postgres # or mysql, sqlite
+  user: postgres
+  password: password
+  host: postgres
+  port: 5432
   name: test
   path: ./sqlite_data
 
