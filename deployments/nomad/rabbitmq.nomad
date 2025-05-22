@@ -5,6 +5,11 @@ job "rabbitmq" {
   group "rabbitmq" {
     count = 1
 
+    host_volume "rabbitmq-data" {
+      path      = "/opt/data/rabbitmq"
+      read_only = false
+    }
+
     network {
       port "amqp" {
         static = 5672

@@ -5,6 +5,11 @@ job "monitoring" {
   group "prometheus" {
     count = 1
 
+    host_volume "prometheus-data" {
+      path      = "/opt/data/prometheus"
+      read_only = false
+    }
+
     network {
       port "prometheus_ui" {
         static = 9090
@@ -78,6 +83,11 @@ EOF
 
   group "grafana" {
     count = 1
+
+    host_volume "grafana-data" {
+      path      = "/opt/data/grafana"
+      read_only = false
+    }
 
     network {
       port "grafana_ui" {

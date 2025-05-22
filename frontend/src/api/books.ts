@@ -1,8 +1,14 @@
-import request from '@/utils/request'
-import type { Book } from '@/types/book'
+import request from '@/utils/request';
+import type { Book, PaginatedBookResponse } from '@/types/book'; // Adjust path as needed
 
-export const getBooks = () =>
-  request.get<any, Book[]>('/books')
+export async function getBooks(params?: {
+  title?: string;
+  author?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedBookResponse> {
+  return request.get<any, PaginatedBookResponse>('/books', { params }); // Ensure this is the correct endpoint
+}
 
 export const createBook = (data: Partial<Book>) =>
   request.post<any, Book>('/books', data)

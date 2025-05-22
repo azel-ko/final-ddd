@@ -1,16 +1,18 @@
-import { ProTable } from '@ant-design/pro-components'
-import type { ActionType, ProColumns } from '@ant-design/pro-components'
-import { Button, message, Modal, Form, Input, Popconfirm } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
-import { useRef, useState } from 'react'
-import { Book } from '@/types/book'
-import { getBooks, createBook, updateBook, deleteBook } from '@/api/books'
+import { ProTable } from '@ant-design/pro-components';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { Button, message, Modal, Form, Input, Popconfirm } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { useRef, useState } from 'react';
+import { Book } from '@/types/book';
+import { getBooks, createBook, updateBook, deleteBook } from '@/api/books';
 
 export default function Books() {
-  const [modalVisible, setModalVisible] = useState(false)
-  const [currentBook, setCurrentBook] = useState<Book>()
-  const actionRef = useRef<ActionType>()
-  const [form] = Form.useForm()
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentBook, setCurrentBook] = useState<Book | undefined>(undefined);
+  const actionRef = useRef<ActionType>();
+  const [form] = Form.useForm();
+  const [searchTitle, setSearchTitle] = useState<string>('');
+  const [searchAuthor, setSearchAuthor] = useState<string>('');
 
   const columns: ProColumns<Book>[] = [
     { title: '书名', dataIndex: 'title' },
@@ -46,17 +48,65 @@ export default function Books() {
         columns={columns}
         actionRef={actionRef}
         request={async (params) => {
-          const data = await getBooks()
+          const apiParams = {
+            page: params.current,
+            pageSize: params.pageSize,
+            title: searchTitle,
+            author: searchAuthor,
+          };
+          if (!apiParams.title) delete apiParams.title;
+          if (!apiParams.author) delete apiParams.author;
+
+          const response = await getBooks(apiParams);
           return {
-            data: data,
+            data: response.items,
+            total: response.total,
             success: true,
-          }
+          };
+        }}
+        rowKey="id"
+        pagination={{
+          defaultPageSize: 10,
+          showSizeChanger: true,
         }}
         toolBarRender={() => [
+          <Input
+            key="searchTitle"
+            placeholder="Search by Title"
+            value={searchTitle}
+            onChange={(e) => setSearchTitle(e.target.value)}
+            style={{ width: 200, marginRight: 8 }}
+          />,
+          <Input
+            key="searchAuthor"
+            placeholder="Search by Author"
+            value={searchAuthor}
+            onChange={(e) => setSearchAuthor(e.target.value)}
+            style={{ width: 200, marginRight: 8 }}
+          />,
+          <Button
+            key="search"
+            type="primary"
+            onClick={() => {
+              actionRef.current?.reloadAndRest?.();
+            }}
+          >
+            Search
+          </Button>,
+          <Button
+            key="reset"
+            onClick={() => {
+              setSearchTitle('');
+              setSearchAuthor('');
+              actionRef.current?.reloadAndRest?.();
+            }}
+          >
+            Reset
+          </Button>,
           <Button key="create" type="primary" onClick={() => {
-            setCurrentBook(undefined)
-            form.resetFields()
-            setModalVisible(true)
+            setCurrentBook(undefined);
+            form.resetFields();
+            setModalVisible(true);
           }}>
             <PlusOutlined /> 新建
           </Button>,

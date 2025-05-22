@@ -15,9 +15,11 @@ const AppLayout = () => {
           <Menu
             theme="dark"
             mode="inline"
+            defaultSelectedKeys={[location.pathname.substring(1) || 'users']}
             items={[
               { key: 'users', icon: <UserOutlined />, label: '用户管理' },
-              { key: 'books', icon: <BookOutlined />, label: '图书管理' }
+              { key: 'books', icon: <BookOutlined />, label: '图书管理' },
+              { key: 'profile', icon: <UserOutlined />, label: '个人资料' }, // New Profile Link
             ]}
             onClick={({ key }) => navigate(`/${key}`)}
           />

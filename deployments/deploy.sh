@@ -146,44 +146,47 @@ check_image_exists() {
 
 # 构建应用镜像
 build_images() {
+  echo -e "${GREEN}Starting function: build_images${NC}"
   echo -e "${YELLOW}检查应用镜像...${NC}"
 
-  local app_image="go-app:latest"
-  local frontend_image="frontend:latest"
+  IMAGE_TAG=$(date +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
+
+  local app_image="go-app:${IMAGE_TAG}"
+  local frontend_image="frontend:${IMAGE_TAG}"
   local need_build_app=false
   local need_build_frontend=false
 
   # 检查主应用镜像是否存在
   if check_image_exists "$app_image"; then
-    echo "主应用镜像已存在，跳过构建"
+    echo "主应用镜像 ${app_image} 已存在，跳过构建"
   else
     need_build_app=true
   fi
 
   # 检查前端镜像是否存在
   if check_image_exists "$frontend_image"; then
-    echo "前端镜像已存在，跳过构建"
+    echo "前端镜像 ${frontend_image} 已存在，跳过构建"
   else
     need_build_frontend=true
   fi
 
   # 如果需要，构建主应用镜像
   if [ "$need_build_app" = true ] || [ "$FORCE_BUILD" = "true" ]; then
-    echo -e "${YELLOW}构建主应用镜像...${NC}"
+    echo -e "${YELLOW}Building go-app:${IMAGE_TAG}...${NC}"
     docker build -t "$app_image" -f ../Dockerfile ..
   fi
 
   # 如果需要，构建前端镜像
   if [ "$need_build_frontend" = true ] || [ "$FORCE_BUILD" = "true" ]; then
-    echo -e "${YELLOW}构建前端镜像...${NC}"
+    echo -e "${YELLOW}Building frontend:${IMAGE_TAG}...${NC}"
     docker build -t "$frontend_image" -f ../frontend/Dockerfile ../frontend
   fi
 
   # 如果使用本地镜像仓库，先设置镜像名称
   if [ "$USE_LOCAL_REGISTRY" = "true" ]; then
     # 设置镜像名称
-    export APP_IMAGE="$LOCAL_REGISTRY_ADDR/go-app:latest"
-    export FRONTEND_IMAGE="$LOCAL_REGISTRY_ADDR/frontend:latest"
+    export APP_IMAGE="$LOCAL_REGISTRY_ADDR/go-app:${IMAGE_TAG}"
+    export FRONTEND_IMAGE="$LOCAL_REGISTRY_ADDR/frontend:${IMAGE_TAG}"
 
     # 注意：镜像推送将在部署本地镜像仓库后进行
   elif [ "$CLUSTER_MODE" = "true" ]; then
@@ -192,41 +195,42 @@ build_images() {
       echo -e "${YELLOW}如果 Nomad 客户端无法访问本地镜像，部署可能会失败.${NC}"
 
       # 使用默认镜像名称
-      export APP_IMAGE="go-app:latest"
-      export FRONTEND_IMAGE="frontend:latest"
+      export APP_IMAGE="go-app:${IMAGE_TAG}"
+      export FRONTEND_IMAGE="frontend:${IMAGE_TAG}"
     else
       echo "推送镜像到仓库: $DOCKER_REGISTRY"
-      docker tag "$app_image" "$DOCKER_REGISTRY/go-app:latest"
-      docker tag "$frontend_image" "$DOCKER_REGISTRY/frontend:latest"
-      docker push "$DOCKER_REGISTRY/go-app:latest"
-      docker push "$DOCKER_REGISTRY/frontend:latest"
+      echo -e "${YELLOW}Pushing go-app:${IMAGE_TAG} to ${DOCKER_REGISTRY}...${NC}"
+      docker tag "$app_image" "$DOCKER_REGISTRY/go-app:${IMAGE_TAG}"
+      docker push "$DOCKER_REGISTRY/go-app:${IMAGE_TAG}"
+
+      echo -e "${YELLOW}Pushing frontend:${IMAGE_TAG} to ${DOCKER_REGISTRY}...${NC}"
+      docker tag "$frontend_image" "$DOCKER_REGISTRY/frontend:${IMAGE_TAG}"
+      docker push "$DOCKER_REGISTRY/frontend:${IMAGE_TAG}"
 
       # 更新镜像名称以在 Nomad 作业中使用
-      export APP_IMAGE="$DOCKER_REGISTRY/go-app:latest"
-      export FRONTEND_IMAGE="$DOCKER_REGISTRY/frontend:latest"
+      export APP_IMAGE="$DOCKER_REGISTRY/go-app:${IMAGE_TAG}"
+      export FRONTEND_IMAGE="$DOCKER_REGISTRY/frontend:${IMAGE_TAG}"
     fi
   else
     # 使用默认镜像名称
-    export APP_IMAGE="go-app:latest"
-    export FRONTEND_IMAGE="frontend:latest"
+    export APP_IMAGE="go-app:${IMAGE_TAG}"
+    export FRONTEND_IMAGE="frontend:${IMAGE_TAG}"
   fi
 
   echo -e "${GREEN}镜像准备完成.${NC}"
+  echo -e "${GREEN}Completed function: build_images${NC}"
 }
 
 # 创建必要的卷
 create_volumes() {
+  echo -e "${GREEN}Starting function: create_volumes${NC}"
   if [ "$CLUSTER_MODE" = "true" ]; then
-    echo -e "${YELLOW}集群模式下，需要在每个 Nomad 客户端上创建数据目录.${NC}"
-    echo -e "${YELLOW}请确保所有 Nomad 客户端上都有以下目录:${NC}"
-    echo "/opt/data/postgres"
-    echo "/opt/data/redis"
-    echo "/opt/data/rabbitmq"
-    echo "/opt/data/prometheus"
-    echo "/opt/data/grafana"
-    echo "/opt/data/traefik"
-    echo "/opt/data/app"
-    echo "/opt/data/registry (仅在运行 Registry 的节点上需要)"
+    echo -e "${YELLOW}IMPORTANT: In cluster mode, you MUST manually create the following directories on EACH Nomad client node before proceeding:${NC}"
+    echo -e "${YELLOW}Example commands to create and permission directories:${NC}"
+    echo -e "${YELLOW}  sudo mkdir -p /opt/data/postgres /opt/data/redis /opt/data/rabbitmq /opt/data/prometheus /opt/data/grafana /opt/data/traefik /opt/data/app /opt/data/registry${NC}"
+    echo -e "${YELLOW}  sudo chmod -R 777 /opt/data/postgres /opt/data/redis /opt/data/rabbitmq /opt/data/prometheus /opt/data/grafana /opt/data/traefik /opt/data/app /opt/data/registry${NC}"
+    echo -e "${YELLOW}Ensure these paths exist and have correct permissions on all client nodes.${NC}"
+    echo -e "${GREEN}Completed function: create_volumes${NC}"
     return
   fi
 
@@ -251,6 +255,7 @@ create_volumes() {
   fi
 
   echo -e "${GREEN}目录创建完成.${NC}"
+  echo -e "${GREEN}Completed function: create_volumes${NC}"
 }
 
 # 部署单个 Nomad 作业
@@ -259,10 +264,12 @@ deploy_job() {
   local job_name=$(basename "$job_file" .nomad)
 
   echo "部署 ${job_name}..."
+  echo -e "${YELLOW}Running Nomad job for ${job_name} from ${job_file}...${NC}"
 
   if [ "$ASYNC_DEPLOY" = "true" ]; then
     # 异步部署，不等待服务健康
     nomad job run -detach "$job_file"
+    echo -e "${GREEN}Successfully submitted Nomad job ${job_name}.${NC}"
     echo "已提交作业 ${job_name}，继续部署下一个服务..."
   else
     # 同步部署，等待服务健康
@@ -270,6 +277,7 @@ deploy_job() {
       echo -e "${RED}部署 ${job_name} 失败.${NC}"
       return 1
     fi
+    echo -e "${GREEN}Successfully submitted Nomad job ${job_name}.${NC}"
 
     # 等待服务健康
     echo "等待 ${job_name} 服务健康检查通过 (最多 ${WAIT_TIMEOUT} 秒)..."
@@ -295,6 +303,7 @@ deploy_job() {
 
 # 部署 Nomad 作业
 deploy_nomad_jobs() {
+  echo -e "${GREEN}Starting function: deploy_nomad_jobs${NC}"
   echo -e "${YELLOW}部署 Nomad 作业...${NC}"
 
   # 设置环境变量
@@ -357,10 +366,13 @@ deploy_nomad_jobs() {
 
       # 推送镜像到本地仓库
       echo "推送镜像到本地仓库: $LOCAL_REGISTRY_ADDR"
-      docker tag "$app_image" "$LOCAL_REGISTRY_ADDR/go-app:latest"
-      docker tag "$frontend_image" "$LOCAL_REGISTRY_ADDR/frontend:latest"
-      docker push "$LOCAL_REGISTRY_ADDR/go-app:latest"
-      docker push "$LOCAL_REGISTRY_ADDR/frontend:latest"
+      echo -e "${YELLOW}Pushing go-app:${IMAGE_TAG} to ${LOCAL_REGISTRY_ADDR}...${NC}"
+      docker tag "go-app:${IMAGE_TAG}" "$APP_IMAGE" # Use already defined APP_IMAGE which includes tag and registry
+      docker push "$APP_IMAGE"
+
+      echo -e "${YELLOW}Pushing frontend:${IMAGE_TAG} to ${LOCAL_REGISTRY_ADDR}...${NC}"
+      docker tag "frontend:${IMAGE_TAG}" "$FRONTEND_IMAGE" # Use already defined FRONTEND_IMAGE
+      docker push "$FRONTEND_IMAGE"
     else
       echo -e "${YELLOW}警告: 本地镜像仓库启动超时，将使用本地镜像.${NC}"
     fi
@@ -392,6 +404,7 @@ deploy_nomad_jobs() {
   if [ "$ASYNC_DEPLOY" = "true" ]; then
     echo -e "${YELLOW}注意: 服务正在后台部署，请使用 Nomad UI 或 'nomad job status' 命令检查部署状态.${NC}"
   fi
+  echo -e "${GREEN}Completed function: deploy_nomad_jobs${NC}"
 }
 
 # 检查服务状态

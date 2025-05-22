@@ -11,6 +11,11 @@ job "registry" {
   group "registry" {
     count = 1
 
+    host_volume "registry-data" {
+      path      = "/opt/data/registry"
+      read_only = false
+    }
+
     network {
       port "registry" {
         static = 5000

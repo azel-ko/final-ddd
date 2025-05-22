@@ -37,3 +37,16 @@ func ToBookResponse(book *entities.Book) *BookResponse {
 		ISBN:   book.ISBN,
 	}
 }
+
+type PaginatedBookResponse struct {
+	Items []BookResponse `json:"items"`
+	Total int64          `json:"total"`
+}
+
+func ToBookResponseList(books []entities.Book) []BookResponse {
+	bookResponses := make([]BookResponse, len(books))
+	for i, book := range books {
+		bookResponses[i] = *ToBookResponse(&book)
+	}
+	return bookResponses
+}

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import Login from '@/pages/login'
 import Users from '@/pages/users'
 import Books from '@/pages/books'
+import ProfilePage from '@/pages/profile'; // New Profile Page
 import Layout from '@/components/Layout'
 
 const RequireAuth = ({ children }: { children: JSX.Element }) => {
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <Navigate to="/users" /> },
       { path: '/users', element: <Users /> },
       { path: '/books', element: <Books /> },
+      { path: '/profile', element: <ProfilePage /> }, // New route for profile
     ],
   },
 ])

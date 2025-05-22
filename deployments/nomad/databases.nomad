@@ -5,6 +5,11 @@ job "databases" {
   group "postgres" {
     count = 1  # 默认启动
 
+    host_volume "pgdata" {
+      path      = "/opt/data/postgres"
+      read_only = false
+    }
+
     network {
       port "postgres" {
         static = 5432

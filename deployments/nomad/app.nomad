@@ -5,6 +5,11 @@ job "app" {
   group "app" {
     count = 1
 
+    host_volume "app-logs" {
+      path      = "/opt/data/app"
+      read_only = false
+    }
+
     network {
       port "http" {
         to = 9999
