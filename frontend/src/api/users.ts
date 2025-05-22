@@ -20,3 +20,9 @@ export const deleteUser = (id: number) =>
 
 export const getUser = (id: number) =>
   request.get<any, User>(`/users/${id}`)
+
+export const getSelfProfile = () =>
+  request.get<any, User>('/users/me')
+
+export const updateSelfProfile = (data: { name?: string; email?: string }) =>
+  request.put<any, User>('/users/me', data)

@@ -42,21 +42,24 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 	{
 		users := api.Group("/users")
 		{
-			users.POST("/", userHandler.Create)
-			users.GET("/:id", userHandler.Get)
-			users.PUT("/:id", userHandler.Update)
-			users.DELETE("/:id", userHandler.Delete)
+			users.GET("/me", userHandler.GetSelf)    // New route for getting self profile
+			users.PUT("/me", userHandler.UpdateSelf) // New route for updating self profile
+			users.POST("/", userHandler.Create)      // Admin/System task, or initial user creation if not via /register
+			users.GET("/:id", userHandler.Get)       // Admin/System task
+			users.PUT("/:id", userHandler.Update)    // Admin/System task
+			users.DELETE("/:id", userHandler.Delete) // Admin/System task
 		}
 
 		books := api.Group("/books")
 		{
+			books.GET("/", bookHandler.ListBooks) // New route for listing books with pagination and filtering
 			books.POST("/", bookHandler.Create)
 			books.GET("/:id", bookHandler.Get)
 			books.PUT("/:id", bookHandler.Update)
 			books.DELETE("/:id", bookHandler.Delete)
 			isbn := books.Group("/isbn")
 			{
-				isbn.GET("/:id", bookHandler.GetByISBN)
+				isbn.GET("/:isbn", bookHandler.GetByISBN) // Changed :id to :isbn for clarity
 			}
 		}
 	}

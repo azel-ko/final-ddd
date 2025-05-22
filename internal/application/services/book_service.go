@@ -64,3 +64,17 @@ func (s *BookService) UpdateBook(id int, req *dto.UpdateBookRequest) (*dto.BookR
 func (s *BookService) DeleteBook(id int) error {
 	return s.repo.DeleteBook(id)
 }
+
+func (s *BookService) ListBooks(page, pageSize int, title, author string) (*dto.PaginatedBookResponse, error) {
+	offset := (page - 1) * pageSize
+	books, total, err := s.repo.ListBooks(offset, pageSize, title, author)
+	if err != nil {
+		return nil, err // Consider wrapping error (e.g., errors.ErrDatabase)
+	}
+
+	bookResponses := dto.ToBookResponseList(books)
+	return &dto.PaginatedBookResponse{
+		Items: bookResponses,
+		Total: total,
+	}, nil
+}

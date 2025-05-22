@@ -5,6 +5,11 @@ job "redis" {
   group "redis" {
     count = 1
 
+    host_volume "redis-data" {
+      path      = "/opt/data/redis"
+      read_only = false
+    }
+
     network {
       port "redis" {
         static = 6379

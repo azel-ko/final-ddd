@@ -159,3 +159,28 @@ export DOCKER_REGISTRY=your-registry.com
 - [Nomad 文档](https://www.nomadproject.io/docs)
 - [Consul 文档](https://www.consul.io/docs)
 - [Traefik 文档](https://doc.traefik.io/traefik/)
+
+## Troubleshooting
+
+Here's guidance on common deployment issues:
+
+### Verifying Host Volumes
+Ensure that the required host paths (e.g., `/opt/data/postgres`, `/opt/data/app`, etc.) exist on all Nomad client nodes where tasks might be scheduled. Check permissions (e.g., `sudo ls -ld /opt/data/postgres`). These directories should be writable by the user/group the container runs as (often requires broad permissions like 777 if the container user is non-root and unknown, or specific UIDs if known).
+
+### Checking Nomad Logs
+Use `nomad status <job_name>` to see job status. Use `nomad alloc status <alloc_id>` for details of a specific allocation. Check allocation logs with `nomad alloc logs <alloc_id>` or `nomad alloc logs <alloc_id> <task_name>`.
+
+### Checking Consul Logs
+Inspect Consul agent logs on both server and client nodes for service discovery issues. Typically found in `/var/log/consul` or via journald.
+
+### Inspecting Container Logs
+If Nomad logs are insufficient, you might need to check Docker container logs directly on the Nomad client node running the allocation. First, find the client node using `nomad alloc status <alloc_id>`, then SSH to that node and use `docker ps` to find the container ID and `docker logs <container_id>`.
+
+### Image Accessibility
+Confirm that Nomad clients can pull the specified Docker images. Check image names and tags in the Nomad job files (e.g., `app.nomad`). If using a private registry, ensure Docker is configured to access it on all client nodes. Test with `docker pull <image_name>:<tag>` on a client node.
+
+### Traefik Issues
+Access the Traefik dashboard (if exposed) to check if it's recognizing backend services. Review Traefik's own logs for errors related to routing or certificate generation. Ensure DNS records correctly point to Traefik's host(s).
+
+### Service Dependencies
+Ensure dependent services (PostgreSQL, Redis, RabbitMQ) are healthy and accessible within the Nomad network. Check their logs via Nomad.

@@ -14,6 +14,11 @@ func (r *mysqlRepository) GetUser(id int) (*entities.User, error) {
 	return &user, nil
 }
 
+func (r *mysqlRepository) UpdateUserProfile(user *entities.User) error {
+	// Updates only Name and Email fields
+	return r.db.Model(user).Select("Name", "Email").Updates(user).Error
+}
+
 func (r *mysqlRepository) UpdateUser(user *entities.User) error {
 	return r.db.Save(user).Error
 }

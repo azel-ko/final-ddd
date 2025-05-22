@@ -85,3 +85,55 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }
+
+func (h *UserHandler) GetSelf(c *gin.Context) {
+	userIDAuth, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	userID, ok := userIDAuth.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID type in context"})
+		return
+	}
+
+	response, err := h.userService.GetSelf(userID)
+	if err != nil {
+		// Consider different error codes based on err type, e.g. http.StatusNotFound
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *UserHandler) UpdateSelf(c *gin.Context) {
+	userIDAuth, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	userID, ok := userIDAuth.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID type in context"})
+		return
+	}
+
+	var req dto.UpdateUserProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	response, err := h.userService.UpdateSelf(userID, &req)
+	if err != nil {
+		// Consider different error codes based on err type
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
