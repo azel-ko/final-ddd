@@ -1,11 +1,12 @@
-job "databases" {
+job "postgres" {
   datacenters = ["dc1"]
   type = "service"
 
   group "postgres" {
-    count = 1  # 默认启动
+    count = 1
 
-    host_volume "pgdata" {
+    # 数据持久化
+    host_volume "postgres-data" {
       path      = "/opt/data/postgres"
       read_only = false
     }
@@ -21,9 +22,11 @@ job "databases" {
       port = "postgres"
 
       check {
+        name     = "postgres-health"
         type     = "tcp"
+        port     = "postgres"
         interval = "10s"
-        timeout  = "2s"
+        timeout  = "3s"
       }
     }
 
@@ -31,10 +34,10 @@ job "databases" {
       driver = "docker"
 
       config {
-        image = "docker.1ms.run/postgres:14"
+        image = "postgres:15-alpine"
         ports = ["postgres"]
-        # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
+
         volumes = [
           "/opt/data/postgres:/var/lib/postgresql/data"
         ]
@@ -51,10 +54,16 @@ job "databases" {
         cpu    = 500
         memory = 1024
       }
+
+      # 健康检查
+      check {
+        name     = "postgres-ready"
+        type     = "script"
+        command  = "/usr/local/bin/pg_isready"
+        args     = ["-U", "${DB_USER}", "-d", "${DB_NAME}"]
+        interval = "10s"
+        timeout  = "3s"
+      }
     }
-
-    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
-
-  # 不再部署 SQLite
 }

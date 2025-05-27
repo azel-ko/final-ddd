@@ -2,15 +2,10 @@ job "registry" {
   datacenters = ["dc1"]
   type = "service"
 
-  # 固定在一个节点上运行
-  constraint {
-    attribute = "${node.unique.name}"
-    value     = "n1"  # 替换为您想要运行 Registry 的节点名称
-  }
-
   group "registry" {
     count = 1
 
+    # 数据持久化
     host_volume "registry-data" {
       path      = "/opt/data/registry"
       read_only = false
@@ -33,37 +28,31 @@ job "registry" {
       ]
 
       check {
-        name     = "alive"
-        type     = "tcp"
+        name     = "registry-health"
+        type     = "http"
+        path     = "/v2/"
         port     = "registry"
         interval = "10s"
-        timeout  = "2s"
+        timeout  = "3s"
       }
     }
-
-    # 不再需要预启动任务
 
     task "registry" {
       driver = "docker"
 
       config {
-        image = "docker.1ms.run/registry:2"
-        # 告诉 Nomad 不要从远程仓库拉取镜像
-        force_pull = false
+        image = "registry:2"
         ports = ["registry"]
+        force_pull = false
+
         volumes = [
           "/opt/data/registry:/var/lib/registry"
         ]
       }
 
-      # 不再需要创建持久化目录的模板
-
       env {
-        # 使用文件系统存储
         REGISTRY_STORAGE = "filesystem"
         REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY = "/var/lib/registry"
-        # 允许使用不安全的 HTTP 连接，简化开发环境配置
-        # 生产环境应该配置 TLS
         REGISTRY_HTTP_ADDR = "0.0.0.0:5000"
         REGISTRY_HTTP_TLS_CERTIFICATE = ""
         REGISTRY_HTTP_TLS_KEY = ""
@@ -74,7 +63,5 @@ job "registry" {
         memory = 256
       }
     }
-
-    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }

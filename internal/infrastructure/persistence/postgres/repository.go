@@ -72,3 +72,35 @@ func (r *postgresRepository) GetBookByISBN(isbn string) (*entities.Book, error) 
 	}
 	return &book, nil
 }
+
+func (r *postgresRepository) ListBooks(offset, limit int, title, author string) ([]entities.Book, int64, error) {
+	var books []entities.Book
+	var total int64
+	
+	query := r.db.Model(&entities.Book{})
+	
+	if title != "" {
+		query = query.Where("title ILIKE ?", "%"+title+"%")
+	}
+	
+	if author != "" {
+		query = query.Where("author ILIKE ?", "%"+author+"%")
+	}
+	
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	
+	if err := query.Offset(offset).Limit(limit).Find(&books).Error; err != nil {
+		return nil, 0, err
+	}
+	
+	return books, total, nil
+}
+
+func (r *postgresRepository) UpdateUserProfile(user *entities.User) error {
+	return r.db.Model(user).Updates(map[string]interface{}{
+		"name":  user.Name,
+		"email": user.Email,
+	}).Error
+}

@@ -1,0 +1,136 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Create embed directory
+        run: mkdir -p internal/interfaces/http/router/frontend/dist/
+
+      - name: Copy frontend build files
+        run: cp -r frontend/dist/* internal/interfaces/http/router/frontend/dist/
+
+      - name: Go Mod Tidy
+        run: go mod tidy
+
+      - name: Go Test
+        run: go test -v ./...
+
+      - name: Build binary
+        run: |
+          VERSION=$(echo $GITHUB_REF | sed -e "s/refs\/tags\///g" -e "s/refs\/heads\///g")
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          COMMIT_HASH=${GITHUB_SHA::8}
+          go build -ldflags "-X 'github.com/azel-ko/final-ddd/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: final-ddd
+          path: final-ddd
+
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: final-ddd
+          path: .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ secrets.DOCKER_REGISTRY }}/final-ddd
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            COMMIT_HASH=${{ github.sha }}
+
+  deploy:
+    name: Deploy to Environment
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Deploy to Development
+        if: github.ref == 'refs/heads/develop'
+        run: echo "Deploying to development environment..."
+        # 这里可以添加部署到开发环境的步骤，例如使用 SSH 或 Kubernetes 客户端
+
+      - name: Deploy to Staging
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: echo "Deploying to staging environment..."
+        # 这里可以添加部署到预发布环境的步骤
+
+      - name: Deploy to Production
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "Deploying to production environment..."
+        # 这里可以添加部署到生产环境的步骤，通常会在发布标签时触发 

@@ -1,27 +1,27 @@
 # configs/config.yml
 app:
   name: final-ddd
-  port: 9999
-  env: release #, debug # or release, test
+  port: 8080  # 改为 8080 以匹配 Dockerfile
+  env: ${APP_ENV:release}
 
 database:
-  type: postgres # or mysql, sqlite
-  user: postgres
-  password: password
-  host: postgres
-  port: 5432
-  name: test
+  type: ${DB_TYPE:postgres}
+  user: ${DB_USER:postgres}
+  password: ${DB_PASSWORD:password}
+  host: ${DATABASE_HOST:postgres}
+  port: ${DATABASE_PORT:5432}
+  name: ${DB_NAME:final_ddd}
   path: ./sqlite_data
 
 jwt:
-  key: "123456"
+  key: ${JWT_SECRET:default_secret_key}
 
 redis:
-  host: redis
-  port: 6379
-  password: ""
+  host: ${REDIS_HOST:redis}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:}
   db: 0
 
 log:
-  level: info
+  level: ${LOG_LEVEL:info}
   format: json

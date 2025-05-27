@@ -5,6 +5,7 @@ job "redis" {
   group "redis" {
     count = 1
 
+    # 数据持久化
     host_volume "redis-data" {
       path      = "/opt/data/redis"
       read_only = false
@@ -21,9 +22,11 @@ job "redis" {
       port = "redis"
 
       check {
+        name     = "redis-health"
         type     = "tcp"
+        port     = "redis"
         interval = "10s"
-        timeout  = "2s"
+        timeout  = "3s"
       }
     }
 
@@ -31,14 +34,23 @@ job "redis" {
       driver = "docker"
 
       config {
-        image = "docker.1ms.run/redis:7.0"
+        image = "redis:7-alpine"
         ports = ["redis"]
-        # 告诉 Nomad 不要从远程仓库拉取镜像
         force_pull = false
+
         volumes = [
           "/opt/data/redis:/data"
         ]
-        args = ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+
+        args = [
+          "redis-server",
+          "--appendonly", "yes",
+          "--requirepass", "${REDIS_PASSWORD}"
+        ]
+      }
+
+      env {
+        REDIS_PASSWORD = "${REDIS_PASSWORD}"
       }
 
       resources {
@@ -46,7 +58,5 @@ job "redis" {
         memory = 256
       }
     }
-
-    # 不再使用 Nomad 卷定义，而是直接使用主机路径
   }
 }
