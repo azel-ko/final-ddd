@@ -95,6 +95,15 @@ deploy/
 - Consul UI: `http://consul-server:8500`
 - Traefik Dashboard: `http://traefik-server:8080`
 
+## 配置验证
+
+在部署前可以验证 Nomad 配置文件：
+
+```bash
+# 验证所有配置文件
+./deploy/scripts/validate-nomad.sh
+```
+
 ## 故障排除
 
 查看 `deploy/docs/troubleshooting.md` 获取常见问题解决方案。

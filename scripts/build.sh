@@ -16,12 +16,12 @@ cd "$PROJECT_ROOT/frontend"
 # 检查 node_modules 是否存在
 if [ ! -d "node_modules" ]; then
   echo "安装前端依赖..."
-  npm install
+  pnpm install
 fi
 
 # 构建前端
 echo "编译前端代码..."
-npm run build
+pnpm run build
 
 # 确保目标目录存在
 mkdir -p "$PROJECT_ROOT/internal/interfaces/http/router/frontend/dist"
@@ -45,4 +45,4 @@ COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 echo "编译 Go 代码..."
 go build -ldflags "-X 'github.com/azel-ko/final-ddd/pkg/version.Version=$VERSION' -X 'github.com/azel-ko/final-ddd/pkg/version.BuildTime=$BUILD_TIME' -X 'github.com/azel-ko/final-ddd/pkg/version.CommitHash=$COMMIT_HASH'" -o final-ddd ./cmd/main.go
 
-echo "构建完成！生成的二进制文件: final-ddd" 
+echo "构建完成！生成的二进制文件: final-ddd"

@@ -12,12 +12,6 @@ job "postgres" {
   group "postgres" {
     count = 1
 
-    # 数据持久化
-    host_volume "postgres-data" {
-      path      = "/opt/data/postgres"
-      read_only = false
-    }
-
     network {
       port "postgres" {
         static = 5432
@@ -45,9 +39,11 @@ job "postgres" {
         ports = ["postgres"]
         force_pull = false
 
-        volumes = [
-          "/opt/data/postgres:/var/lib/postgresql/data"
-        ]
+        mount {
+          type   = "bind"
+          source = "/opt/data/postgres"
+          target = "/var/lib/postgresql/data"
+        }
       }
 
       env {

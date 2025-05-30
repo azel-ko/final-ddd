@@ -13,7 +13,6 @@ import (
 	"github.com/azel-ko/final-ddd/pkg/auth"
 	"github.com/azel-ko/final-ddd/pkg/config"
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 //go:embed frontend/dist/*
@@ -25,7 +24,6 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 	r := gin.Default()
 	r.Use(
 		middleware.RateLimitMiddleware(),
-		middleware.PrometheusMiddleware(),
 		middleware.LoggerMiddleware(),
 		middleware.ErrorHandler(),
 		middleware.CORSMiddleware(),
@@ -43,10 +41,9 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 
 	// 健康检查路由
 	r.GET("/api/health", healthHandler.Check)
-	
+
 	r.POST("/api/auth/login", authHandler.Login)
 	r.POST("/api/auth/register", authHandler.Register)
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware(jwtManager))
@@ -77,26 +74,26 @@ func Setup(cfg *config.Config, repo repository.Repository, redisCache *cache.Red
 
 	// 获取嵌入的文件系统
 	distFS := embeddedFiles
-	
+
 	// 创建一个 http.FileSystem
 	httpFS := http.FS(distFS)
 
 	// 处理静态文件请求，特别是 SPA 的回退
 	r.NoRoute(func(c *gin.Context) {
-		// 检查请求路径是否是 API 路径或 metrics 路径
-		if strings.HasPrefix(c.Request.URL.Path, "/api") || strings.HasPrefix(c.Request.URL.Path, "/metrics") {
+		// 检查请求路径是否是 API 路径
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
 			c.JSON(http.StatusNotFound, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
 			return
 		}
 
 		// 构建完整的文件路径，包括 frontend/dist 前缀
 		filePath := "frontend/dist/" + strings.TrimPrefix(c.Request.URL.Path, "/")
-		
+
 		// 如果请求的是根路径，则提供 index.html
 		if c.Request.URL.Path == "/" {
 			filePath = "frontend/dist/index.html"
 		}
-		
+
 		// 尝试打开文件，如果不存在则回退到 index.html
 		f, err := distFS.Open(filePath)
 		if err != nil {

@@ -12,12 +12,6 @@ job "registry" {
   group "registry" {
     count = 1
 
-    # 数据持久化
-    host_volume "registry-data" {
-      path      = "/opt/data/registry"
-      read_only = false
-    }
-
     network {
       port "registry" {
         static = 5000
@@ -52,9 +46,11 @@ job "registry" {
         ports = ["registry"]
         force_pull = false
 
-        volumes = [
-          "/opt/data/registry:/var/lib/registry"
-        ]
+        mount {
+          type   = "bind"
+          source = "/opt/data/registry"
+          target = "/var/lib/registry"
+        }
       }
 
       env {

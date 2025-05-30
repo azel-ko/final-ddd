@@ -8,11 +8,12 @@
 - 前端静态文件嵌入到 Go 二进制文件中
 - 领域驱动设计（DDD）架构
 - 支持多种数据库（MySQL, PostgreSQL, SQLite）
+- 使用 pnpm 进行前端包管理
 - Redis 缓存支持
 - JWT 认证
 - Prometheus 监控
 - Docker 容器化部署
-- Nomad 集群部署支持
+- Nomad 集群部署支持（单机/集群模式自适应）
 
 ## 项目结构
 
@@ -45,47 +46,59 @@
 
 - Go 1.23+
 - Node.js 18+
+- pnpm 10.6.2+ (前端包管理器)
 - Docker (可选)
 - Redis (可选，用于缓存)
 - 数据库 (MySQL, PostgreSQL 或 SQLite)
 
 ### 本地开发
 
-1. 克隆仓库
+1. 安装 pnpm（如果尚未安装）
+
+```bash
+# 使用 npm 安装 pnpm
+npm install -g pnpm
+
+# 或者使用 corepack（Node.js 16.10+）
+corepack enable
+corepack prepare pnpm@latest --activate
+```
+
+2. 克隆仓库
 
 ```bash
 git clone https://github.com/azel-ko/final-ddd.git
 cd final-ddd
 ```
 
-2. 安装依赖
+3. 安装依赖
 
 ```bash
 # 后端依赖
 go mod download
 
-# 前端依赖
+# 前端依赖（使用 pnpm）
 cd frontend
-npm install
+pnpm install
 cd ..
 ```
 
-3. 构建前端
+4. 构建前端
 
 ```bash
 cd frontend
-npm run build
+pnpm run build
 cd ..
 ```
 
-4. 复制前端构建文件到嵌入目录
+5. 复制前端构建文件到嵌入目录
 
 ```bash
 mkdir -p internal/interfaces/http/router/frontend/dist
 cp -r frontend/dist/* internal/interfaces/http/router/frontend/dist/
 ```
 
-5. 运行应用程序
+6. 运行应用程序
 
 ```bash
 go run cmd/main.go

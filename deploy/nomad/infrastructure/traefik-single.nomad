@@ -5,12 +5,6 @@ job "traefik" {
   group "traefik" {
     count = 1
 
-    # 数据持久化
-    host_volume "traefik-data" {
-      path      = "/opt/data/traefik"
-      read_only = false
-    }
-
     # 网络配置 - 单机模式使用 host 网络
     network {
       mode = "host"
@@ -39,14 +33,20 @@ job "traefik" {
 
         volumes = [
           "local/acme.json:/etc/traefik/acme.json",
-          "/opt/data/traefik:/logs"
+          "local/dynamic.yml:/etc/traefik/dynamic/dynamic.yml"
         ]
+
+        mount {
+          type   = "bind"
+          source = "/opt/data/traefik"
+          target = "/logs"
+        }
 
         args = [
           "--api.dashboard=true",
           "--api.insecure=true",
-          "--providers.nomad=true",
-          "--providers.nomad.exposedByDefault=false",
+          "--providers.file.directory=/etc/traefik/dynamic",
+          "--providers.file.watch=true",
           "--entrypoints.web.address=:80",
           "--entrypoints.websecure.address=:443",
           "--entrypoints.traefik.address=:8080",
@@ -65,6 +65,41 @@ job "traefik" {
         data = "{}"
         destination = "local/acme.json"
         perms = "600"
+      }
+
+      # 创建动态配置文件
+      template {
+        data = <<EOF
+http:
+  routers:
+    app:
+      rule: "Host(`${DOMAIN_NAME}`)"
+      entryPoints:
+        - websecure
+      service: app
+      tls:
+        certResolver: letsencrypt
+    app-http:
+      rule: "Host(`${DOMAIN_NAME}`)"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+      service: app
+
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    app:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:8080"
+EOF
+        destination = "local/dynamic.yml"
       }
 
       resources {

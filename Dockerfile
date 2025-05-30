@@ -1,23 +1,28 @@
 # 多阶段构建
 
 # 阶段 1: 前端构建
-FROM node:18-alpine as frontend-builder
+FROM docker.1ms.run/node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 
+# 启用 corepack 并安装指定版本的 pnpm
+RUN corepack enable && corepack prepare pnpm@10.6.2 --activate
+
 # 复制前端依赖文件
-COPY frontend/package*.json ./
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
 
 # 安装依赖
-RUN npm install
+# RUN pnpm config set registry https://repo.huaweicloud.com/repository/npm/ && \
+#     pnpm store prune && \
+RUN pnpm install --frozen-lockfile
 
 # 复制前端源代码
 COPY frontend/ ./
 
 # 构建前端
-RUN npm run build
+RUN pnpm run build
 
 # 阶段 2: 后端构建
-FROM golang:1.23-alpine as backend-builder
+FROM docker.1ms.run/golang:1.23-alpine AS backend-builder
 WORKDIR /app
 
 # 安装基本构建工具
@@ -27,7 +32,7 @@ RUN apk add --no-cache git build-base
 COPY go.mod go.sum ./
 
 # 下载依赖
-RUN go mod download
+RUN export GOPROXY=https://goproxy.cn && go mod download
 
 # 复制后端源代码
 COPY cmd/ ./cmd/
@@ -49,7 +54,7 @@ ARG COMMIT_HASH=unknown
 RUN go build -ldflags "-X 'github.com/azel-ko/final-ddd/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
 
 # 阶段 3: 最终运行镜像
-FROM alpine:latest
+FROM docker.1ms.run/alpine:latest
 WORKDIR /app
 
 # 安装运行时依赖

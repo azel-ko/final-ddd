@@ -1,5 +1,40 @@
-frontend/
+# Git 相关
 .git/
 .gitignore
+
+# 文档文件
 README.md
 *.md
+
+# 前端开发文件（保留构建所需的文件）
+frontend/node_modules/
+frontend/.vite/
+frontend/.env*
+frontend/coverage/
+frontend/dist/
+
+# 部署相关
+deploy/
+terraform/
+scripts/
+logs/
+
+# 测试文件
+test/
+*.test.js
+*.test.ts
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 其他不需要的文件
+Makefile
