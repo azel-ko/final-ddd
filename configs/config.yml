@@ -25,3 +25,27 @@ redis:
 log:
   level: ${LOG_LEVEL:info}
   format: json
+  output: ${LOG_OUTPUT:stdout}  # stdout, file, both
+  file_path: ${LOG_FILE_PATH:/var/log/app/app.log}
+  max_size: ${LOG_MAX_SIZE:100}      # MB
+  max_backups: ${LOG_MAX_BACKUPS:5}  # 保留文件数
+  max_age: ${LOG_MAX_AGE:30}         # 保留天数
+  compress: ${LOG_COMPRESS:true}     # 压缩旧日志
+
+# 监控配置
+monitoring:
+  # Prometheus metrics
+  metrics:
+    enabled: ${METRICS_ENABLED:true}
+    port: ${METRICS_PORT:9090}
+    path: ${METRICS_PATH:/metrics}
+
+  # 日志监控 (Loki)
+  loki:
+    enabled: ${LOKI_ENABLED:false}
+    endpoint: ${LOKI_ENDPOINT:http://loki:3100}
+
+  # 链路追踪 (可选)
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    jaeger_endpoint: ${JAEGER_ENDPOINT:http://jaeger:14268/api/traces}
