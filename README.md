@@ -13,7 +13,7 @@
 - JWT 认证
 - Prometheus 监控
 - Docker 容器化部署
-- Nomad 集群部署支持（单机/集群模式自适应）
+- k3s 轻量级 Kubernetes 部署支持
 
 ## 项目结构
 
@@ -21,12 +21,11 @@
 .
 ├── cmd/                # 应用程序入口
 ├── configs/            # 配置文件
-├── deploy/             # 部署相关配置 (新的部署目录)
+├── deploy/             # 部署相关配置
 │   ├── scripts/        # 部署脚本
-│   ├── nomad/          # Nomad 作业定义
-│   │   ├── infrastructure/  # 基础设施服务
-│   │   └── applications/    # 应用服务
-│   ├── configs/        # 环境配置
+│   ├── k8s/            # Kubernetes 清单文件
+│   │   ├── base/       # 基础配置
+│   │   └── environments/ # 环境特定配置
 │   └── docs/           # 部署文档
 ├── frontend/           # 前端应用程序
 ├── internal/           # 内部包
@@ -35,9 +34,9 @@
 │   ├── infrastructure/ # 基础设施层
 │   └── interfaces/     # 接口层
 ├── pkg/                # 公共包
-├── scripts/            # 构建脚本
+├── deploy/scripts/     # 部署和构建脚本
 ├── terraform/          # 基础设施即代码
-└── Makefile           # 部署快捷命令
+└── Taskfile.yml       # Task runner 配置
 ```
 
 ## 开发环境设置
@@ -118,72 +117,94 @@ go run cmd/main.go
 ./final-ddd
 ```
 
-## 部署
+## 🚀 部署
 
-本项目使用 Nomad + Consul + Traefik 进行现代化容器编排部署。
+本项目采用现代化的 k3s (轻量级 Kubernetes) 部署策略，提供完整的自动化部署解决方案。
 
-### 快速开始
+### ⚡ 快速部署
 
-使用 Makefile 进行快速部署：
-
+#### 本地部署 (5分钟)
 ```bash
-# 检查环境
-make check
+# 一键本地部署
+make deploy-local
 
-# 部署到开发环境（自动检测单机/集群模式）
-make dev
+# 或者使用脚本
+./deploy/scripts/k3s-deploy.sh --env dev --force-build
+```
 
-# 强制使用单机模式部署
-make dev CLUSTER_MODE=single
+#### 远程部署
+```bash
+# 一键远程部署 (替换为您的服务器IP)
+make deploy-remote HOST=192.168.1.100
 
-# 强制使用集群模式部署
-make dev CLUSTER_MODE=cluster
+# 或者使用脚本
+./deploy/scripts/remote-deploy.sh --host 192.168.1.100 --all
+```
+
+### 📋 分步部署
+
+#### 1. 环境准备
+```bash
+# 安装 k3s
+./deploy/scripts/install-k3s.sh
+
+# 设置集群组件
+./deploy/scripts/setup-cluster.sh --env dev
+```
+
+#### 2. 应用部署
+```bash
+# 部署到开发环境
+./deploy/scripts/k3s-deploy.sh --env dev
 
 # 部署到生产环境
-make prod DOMAIN=your-domain.com
-
-# 查看服务状态
-make status
-
-# 查看应用日志
-make logs
+./deploy/scripts/k3s-deploy.sh --env prod --domain your-domain.com
 ```
 
-### 环境搭建
+#### 3. 验证部署
+```bash
+# 健康检查
+./deploy/scripts/health-check.sh --env dev
 
-首次部署前需要搭建 Nomad/Consul 环境，详见：[环境搭建指南](deploy/docs/setup.md)
+# 访问应用
+kubectl port-forward svc/final-ddd-backend-service 8080:8080 -n final-ddd-dev
+```
 
-### 部署脚本
+### 🛠️ 部署脚本
 
-项目提供了完整的部署脚本：
+| 脚本 | 功能 | 使用场景 |
+|------|------|----------|
+| `k3s-deploy.sh` | 完整应用部署 | 主要部署脚本 |
+| `remote-deploy.sh` | 远程部署 | 远程服务器部署 |
+| `env-manager.sh` | 环境管理 | 环境生命周期管理 |
+| `health-check.sh` | 健康检查 | 运维监控 |
+| `rollback.sh` | 版本回滚 | 紧急回滚 |
+| `remote-troubleshoot.sh` | 故障排除 | 问题诊断和修复 |
+
+### 🌍 环境管理
 
 ```bash
-# 部署到开发环境（自动检测模式）
-./deploy/scripts/deploy.sh --env dev
+# 创建环境
+./deploy/scripts/env-manager.sh create --env staging
 
-# 强制使用单机模式部署
-./deploy/scripts/deploy.sh --env dev --cluster-mode single
+# 查看所有环境
+./deploy/scripts/env-manager.sh list
 
-# 强制使用集群模式部署
-./deploy/scripts/deploy.sh --env dev --cluster-mode cluster
-
-# 部署到生产环境并指定域名
-./deploy/scripts/deploy.sh --env prod --domain your-domain.com
-
-# 强制重新构建并异步部署
-./deploy/scripts/deploy.sh --env dev --force-build --async
+# 销毁环境
+./deploy/scripts/env-manager.sh destroy --env dev --force
 ```
 
-#### 部署参数
+### 📊 监控访问
 
-- `--env`: 部署环境 (dev|staging|prod)
-- `--domain`: 应用程序域名
-- `--cluster-mode`: 集群模式 (auto|single|cluster)
-- `--force-build`: 强制重新构建镜像
-- `--async`: 异步部署，不等待健康检查
-- `--skip-infra`: 跳过基础设施部署
-- `--nomad-addr`: Nomad 服务器地址
-- `--consul-addr`: Consul 服务器地址
+```bash
+# Grafana 仪表板
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+# 访问: http://localhost:3000 (admin/admin123)
+
+# Prometheus 指标
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+# 访问: http://localhost:9090
+```
 
 ### 服务架构
 
@@ -217,16 +238,15 @@ PostgreSQL (服务发现)
 
 - 应用主页: `https://${DOMAIN_NAME}`
 - Traefik Dashboard: `http://traefik-server:8080`
-- Nomad UI: `http://nomad-server:4646`
-- Consul UI: `http://consul-server:8500`
+- Kubernetes Dashboard: `https://kubernetes-dashboard`
 
 ### 添加新服务
 
 要添加新服务（如 Redis），请参考：
 
-1. 复制 `deploy/nomad/infrastructure/redis.nomad.example` 为 `redis.nomad`
-2. 在 `deploy/scripts/deploy.sh` 中添加部署逻辑
-3. 在环境配置文件中添加相关环境变量
+1. 在 `deploy/k8s/base/` 目录中创建新的 Kubernetes 清单文件
+2. 在 `deploy/k8s/environments/` 中添加环境特定配置
+3. 更新部署脚本以包含新服务
 
 ### 故障排除
 

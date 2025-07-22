@@ -7,7 +7,7 @@ import (
 	"github.com/azel-ko/final-ddd/internal/domain/repository"
 	"github.com/azel-ko/final-ddd/internal/infrastructure/cache"
 	"github.com/azel-ko/final-ddd/pkg/auth"
-	"github.com/azel-ko/final-ddd/pkg/logger"
+	"github.com/azel-ko/final-ddd/internal/pkg/logger"
 	"go.uber.org/zap"
 	"time"
 )

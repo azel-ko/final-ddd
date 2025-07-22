@@ -1,0 +1,436 @@
+# Enhanced PostgreSQL Deployment for Production
+# 这个配置提供了更完整的PostgreSQL部署，包括配置管理、备份和监控
+
+# 1. PostgreSQL ConfigMap - 数据库配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+    component: database
+data:
+  postgresql.conf: |
+    # PostgreSQL 配置文件
+    # 连接和认证设置
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 100
+    
+    # 内存设置
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # WAL 设置
+    wal_level = replica
+    max_wal_size = 1GB
+    min_wal_size = 80MB
+    checkpoint_completion_target = 0.9
+    
+    # 日志设置
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'error'
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    
+    # 性能设置
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+    # 自动清理设置
+    autovacuum = on
+    autovacuum_max_workers = 3
+    autovacuum_naptime = 1min
+    
+  pg_hba.conf: |
+    # PostgreSQL Client Authentication Configuration File
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    
+    # "local" is for Unix domain socket connections only
+    local   all             all                                     trust
+    
+    # IPv4 local connections:
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             10.0.0.0/8              md5
+    host    all             all             172.16.0.0/12           md5
+    host    all             all             192.168.0.0/16          md5
+    
+    # IPv6 local connections:
+    host    all             all             ::1/128                 md5
+    
+    # 允许复制连接
+    host    replication     all             10.0.0.0/8              md5
+    host    replication     all             172.16.0.0/12           md5
+    host    replication     all             192.168.0.0/16          md5
+
+---
+# 2. PostgreSQL Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secrets
+  labels:
+    app: postgres
+    component: database
+type: Opaque
+data:
+  # Base64 编码的值 - 在生产环境中应该使用实际的安全密码
+  postgres-db: ZmluYWxfZGRk  # final_ddd
+  postgres-user: cG9zdGdyZXM=  # postgres
+  postgres-password: cGFzc3dvcmQxMjM=  # password123
+  postgres-replication-user: cmVwbGljYXRvcg==  # replicator
+  postgres-replication-password: cmVwbGljYXRvcjEyMw==  # replicator123
+
+---
+# 3. PostgreSQL StatefulSet (推荐用于数据库)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    component: database
+    version: "15"
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      component: database
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+        version: "15"
+      annotations:
+        # Prometheus 监控注解
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9187"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: postgres
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      initContainers:
+      # 初始化容器：设置数据目录权限
+      - name: postgres-init
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          chown -R 999:999 /var/lib/postgresql/data
+          chmod 700 /var/lib/postgresql/data
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        securityContext:
+          runAsUser: 0
+      containers:
+      # 主PostgreSQL容器
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+        env:
+        # 基础配置
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=C"
+        
+        # 复制用户配置
+        - name: POSTGRES_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-replication-user
+        - name: POSTGRES_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-replication-password
+        
+        # 资源限制
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        # 卷挂载
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+          readOnly: true
+        - name: postgres-config
+          mountPath: /etc/postgresql/pg_hba.conf
+          subPath: pg_hba.conf
+          readOnly: true
+        - name: postgres-init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        
+        # 健康检查
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # 启动探针
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        
+        # 安全上下文
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 999
+          capabilities:
+            drop:
+            - ALL
+      
+      # PostgreSQL Exporter 容器 (用于监控)
+      - name: postgres-exporter
+        image: prometheuscommunity/postgres-exporter:v0.12.0
+        ports:
+        - name: metrics
+          containerPort: 9187
+          protocol: TCP
+        env:
+        - name: DATA_SOURCE_NAME
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:5432/$(POSTGRES_DB)?sslmode=disable"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-password
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: postgres-db
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      
+      # 卷定义
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-init-scripts
+        configMap:
+          name: postgres-init-scripts
+          defaultMode: 0755
+      
+      # 节点选择
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      # 容忍度
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # 优雅关闭
+      terminationGracePeriodSeconds: 60
+  
+  # 持久化卷声明模板
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+      labels:
+        app: postgres
+        component: database
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "local-path"
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# 4. PostgreSQL 初始化脚本
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  labels:
+    app: postgres
+    component: database
+data:
+  01-init-database.sql: |
+    -- 创建应用数据库和用户
+    CREATE DATABASE final_ddd;
+    
+    -- 创建应用用户
+    CREATE USER final_ddd_user WITH ENCRYPTED PASSWORD 'final_ddd_password';
+    
+    -- 授予权限
+    GRANT ALL PRIVILEGES ON DATABASE final_ddd TO final_ddd_user;
+    
+    -- 连接到应用数据库
+    \c final_ddd;
+    
+    -- 创建扩展
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    
+    -- 授予schema权限
+    GRANT ALL ON SCHEMA public TO final_ddd_user;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO final_ddd_user;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO final_ddd_user;
+    
+    -- 设置默认权限
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO final_ddd_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO final_ddd_user;
+  
+  02-monitoring-setup.sql: |
+    -- 创建监控用户
+    CREATE USER postgres_exporter WITH ENCRYPTED PASSWORD 'exporter_password';
+    
+    -- 授予监控权限
+    GRANT CONNECT ON DATABASE final_ddd TO postgres_exporter;
+    GRANT pg_monitor TO postgres_exporter;
+    
+    -- 在postgres数据库中也授予权限
+    \c postgres;
+    GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
+    GRANT pg_monitor TO postgres_exporter;
+
+---
+# 5. PostgreSQL Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    component: database
+automountServiceAccountToken: false
+
+---
+# 6. PostgreSQL Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  labels:
+    app: postgres
+    component: database
+    service-type: headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres
+    protocol: TCP
+  selector:
+    app: postgres
+    component: database
+
+---
+# 7. PostgreSQL Monitoring Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-metrics
+  labels:
+    app: postgres
+    component: database
+    service-type: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9187"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9187
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    app: postgres
+    component: database

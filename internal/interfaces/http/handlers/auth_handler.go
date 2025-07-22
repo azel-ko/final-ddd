@@ -5,7 +5,7 @@ import (
 
 	"github.com/azel-ko/final-ddd/internal/application/dto"
 	"github.com/azel-ko/final-ddd/internal/application/services"
-	"github.com/azel-ko/final-ddd/pkg/logger"
+	"github.com/azel-ko/final-ddd/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

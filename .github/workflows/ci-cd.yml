@@ -72,7 +72,7 @@ jobs:
           VERSION=$(echo $GITHUB_REF | sed -e "s/refs\/tags\///g" -e "s/refs\/heads\///g")
           BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
           COMMIT_HASH=${GITHUB_SHA::8}
-          go build -ldflags "-X 'github.com/azel-ko/final-ddd/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
+          go build -ldflags "-X 'github.com/azel-ko/final-ddd/internal/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/internal/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/internal/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3

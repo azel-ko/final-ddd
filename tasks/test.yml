@@ -1,0 +1,74 @@
+# Test tasks
+version: '3'
+
+tasks:
+  unit:
+    desc: Run unit tests
+    cmds:
+      - go test -v ./...
+
+  integration:
+    desc: Run integration tests
+    cmds:
+      - go test -v -tags=integration ./test/...
+
+  e2e:
+    desc: Run end-to-end tests
+    cmds:
+      - |
+        echo "Starting e2e tests..."
+        # Ensure test environment is running
+        task deploy:dev
+        # Run tests
+        go test -v -tags=e2e ./test/e2e/...
+
+  coverage:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated: coverage.html"
+
+  benchmark:
+    desc: Run benchmark tests
+    cmds:
+      - go test -v -bench=. -benchmem ./...
+
+  lint:
+    desc: Run code linting
+    cmds:
+      - |
+        if command -v golangci-lint >/dev/null 2>&1; then
+          golangci-lint run
+        else
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run
+        fi
+
+  frontend-test:
+    desc: Run frontend tests
+    dir: frontend
+    cmds:
+      - pnpm run test
+
+  frontend-lint:
+    desc: Run frontend linting
+    dir: frontend
+    cmds:
+      - pnpm run lint
+
+  all:
+    desc: Run all tests
+    cmds:
+      - task: lint
+      - task: frontend-lint
+      - task: unit
+      - task: frontend-test
+      - task: integration
+
+  ci:
+    desc: Run CI pipeline tests
+    cmds:
+      - task: all
+      - task: coverage

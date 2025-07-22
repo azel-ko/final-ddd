@@ -1,0 +1,243 @@
+# Endpoints and EndpointSlices for service discovery
+# 这些资源用于高级服务发现和负载均衡配置
+
+# 1. 外部数据库端点 (如果使用外部PostgreSQL)
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-postgres
+  labels:
+    app: postgres
+    component: database
+    type: external
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  # 注意：没有selector，需要手动创建Endpoints
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-postgres
+  labels:
+    app: postgres
+    component: database
+    type: external
+subsets:
+- addresses:
+  # 替换为实际的外部PostgreSQL地址
+  - ip: "10.0.1.100"  # 示例IP，需要替换为实际地址
+  ports:
+  - port: 5432
+    name: postgres
+    protocol: TCP
+
+---
+# 2. 外部Redis端点 (如果使用外部Redis)
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-redis
+  labels:
+    app: redis
+    component: cache
+    type: external
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-redis
+  labels:
+    app: redis
+    component: cache
+    type: external
+subsets:
+- addresses:
+  # 替换为实际的外部Redis地址
+  - ip: "10.0.1.101"  # 示例IP，需要替换为实际地址
+  ports:
+  - port: 6379
+    name: redis
+    protocol: TCP
+
+---
+# 3. EndpointSlice for better service discovery (Kubernetes 1.17+)
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: final-ddd-backend-endpoints
+  labels:
+    app: final-ddd
+    component: backend
+    kubernetes.io/service-name: final-ddd-backend-service
+addressType: IPv4
+ports:
+- name: http
+  port: 8080
+  protocol: TCP
+- name: metrics
+  port: 9090
+  protocol: TCP
+endpoints:
+# 这些端点会由Kubernetes自动管理，这里只是示例
+- addresses:
+  - "10.244.1.10"  # Pod IP示例
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+  targetRef:
+    kind: Pod
+    name: final-ddd-app-xxx
+    namespace: default
+
+---
+# 4. 服务拓扑配置 (用于就近路由)
+apiVersion: v1
+kind: Service
+metadata:
+  name: final-ddd-topology-aware
+  labels:
+    app: final-ddd
+    component: backend
+    topology-aware: "true"
+  annotations:
+    service.kubernetes.io/topology-aware-hints: "auto"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: final-ddd
+    component: backend
+  # 启用拓扑感知路由
+  internalTrafficPolicy: Local
+
+---
+# 5. 多端口服务配置
+apiVersion: v1
+kind: Service
+metadata:
+  name: final-ddd-multi-port
+  labels:
+    app: final-ddd
+    component: backend
+    service-type: multi-port
+spec:
+  type: ClusterIP
+  ports:
+  # HTTP API端口
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+    appProtocol: http
+  
+  # HTTPS API端口 (如果应用支持)
+  - port: 8443
+    targetPort: https
+    protocol: TCP
+    name: https
+    appProtocol: https
+  
+  # gRPC端口 (如果应用支持)
+  - port: 9000
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+    appProtocol: grpc
+  
+  # Prometheus指标端口
+  - port: 9090
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+    appProtocol: http
+  
+  # 健康检查端口
+  - port: 8081
+    targetPort: health
+    protocol: TCP
+    name: health
+    appProtocol: http
+  
+  selector:
+    app: final-ddd
+    component: backend
+
+---
+# 6. 会话亲和性服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: final-ddd-session-affinity
+  labels:
+    app: final-ddd
+    component: backend
+    session-affinity: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: final-ddd
+    component: backend
+  # 启用会话亲和性
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3小时
+
+---
+# 7. 服务监控配置
+apiVersion: v1
+kind: Service
+metadata:
+  name: final-ddd-monitoring
+  labels:
+    app: final-ddd
+    component: backend
+    monitoring: "enabled"
+  annotations:
+    # Prometheus监控注解
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+    prometheus.io/scheme: "http"
+    # 服务网格注解 (如果使用Istio)
+    sidecar.istio.io/inject: "true"
+    # 链路追踪注解
+    jaeger.io/inject: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: final-ddd
+    component: backend

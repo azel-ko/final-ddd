@@ -1,0 +1,51 @@
+# 测试环境配置 - PostgreSQL 优先
+app:
+  name: final-ddd
+  port: 8080
+  env: staging
+
+# PostgreSQL 优先数据库配置
+database:
+  # 测试环境使用安全的 PostgreSQL 连接
+  url: postgresql://postgres:staging_password@postgres-staging:5432/final_ddd_staging?sslmode=require
+  
+  host: postgres-staging
+  port: 5432
+  name: final_ddd_staging
+  user: postgres
+  ssl_mode: require
+  
+  # 测试环境连接池配置（中等）
+  pool:
+    max_open: 20
+    max_idle: 5
+    max_lifetime: 300s
+  
+  # 向后兼容
+  type: postgres
+
+jwt:
+  key: staging_jwt_secret_key
+
+redis:
+  host: redis-staging
+  port: 6379
+  password: ""
+  db: 0
+
+log:
+  level: info
+  format: json
+  output: stdout
+
+monitoring:
+  metrics:
+    enabled: true
+    port: 9090
+    path: /metrics
+  loki:
+    enabled: true
+    endpoint: http://loki-staging:3100
+  tracing:
+    enabled: true
+    jaeger_endpoint: http://jaeger-staging:14268/api/traces

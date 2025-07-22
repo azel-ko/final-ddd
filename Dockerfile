@@ -51,7 +51,7 @@ ARG BUILD_TIME=unknown
 ARG COMMIT_HASH=unknown
 
 # 构建应用
-RUN go build -ldflags "-X 'github.com/azel-ko/final-ddd/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
+RUN go build -ldflags "-X 'github.com/azel-ko/final-ddd/internal/pkg/version.Version=${VERSION}' -X 'github.com/azel-ko/final-ddd/internal/pkg/version.BuildTime=${BUILD_TIME}' -X 'github.com/azel-ko/final-ddd/internal/pkg/version.CommitHash=${COMMIT_HASH}'" -o final-ddd ./cmd/main.go
 
 # 阶段 3: 最终运行镜像
 FROM docker.1ms.run/alpine:latest

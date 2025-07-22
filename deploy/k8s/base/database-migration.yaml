@@ -1,0 +1,456 @@
+# Database Migration and Initialization Jobs
+# 用于数据库迁移和初始化的Kubernetes Jobs
+
+# 1. 数据库迁移Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration
+  labels:
+    app: final-ddd
+    component: migration
+    job-type: database-migration
+spec:
+  template:
+    metadata:
+      labels:
+        app: final-ddd
+        component: migration
+        job-type: database-migration
+    spec:
+      serviceAccountName: final-ddd-migration
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: final-ddd:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "开始数据库迁移..."
+          
+          # 等待数据库就绪
+          until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+            echo "等待PostgreSQL启动..."
+            sleep 2
+          done
+          
+          echo "数据库已就绪，开始迁移..."
+          
+          # 运行迁移 (假设应用有迁移命令)
+          ./final-ddd migrate
+          
+          echo "数据库迁移完成"
+        env:
+        # 数据库配置
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "final_ddd"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-password
+        - name: DB_SSL_MODE
+          value: "disable"
+        
+        # 应用配置
+        - name: APP_ENV
+          value: "migration"
+        - name: LOG_LEVEL
+          value: "info"
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      
+      # 节点选择
+      nodeSelector:
+        kubernetes.io/os: linux
+
+---
+# 2. 数据库种子数据Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-seed
+  labels:
+    app: final-ddd
+    component: seed
+    job-type: database-seed
+spec:
+  template:
+    metadata:
+      labels:
+        app: final-ddd
+        component: seed
+        job-type: database-seed
+    spec:
+      serviceAccountName: final-ddd-migration
+      restartPolicy: OnFailure
+      containers:
+      - name: seed
+        image: final-ddd:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "开始数据库种子数据初始化..."
+          
+          # 等待数据库就绪
+          until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+            echo "等待PostgreSQL启动..."
+            sleep 2
+          done
+          
+          echo "数据库已就绪，开始种子数据初始化..."
+          
+          # 运行种子数据 (假设应用有种子命令)
+          ./final-ddd seed
+          
+          echo "种子数据初始化完成"
+        env:
+        # 数据库配置
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "final_ddd"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-password
+        - name: DB_SSL_MODE
+          value: "disable"
+        
+        # 应用配置
+        - name: APP_ENV
+          value: "seed"
+        - name: LOG_LEVEL
+          value: "info"
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      
+      # 节点选择
+      nodeSelector:
+        kubernetes.io/os: linux
+
+---
+# 3. 数据库备份CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: database-backup
+  labels:
+    app: final-ddd
+    component: backup
+    job-type: database-backup
+spec:
+  schedule: "0 2 * * *"  # 每天凌晨2点执行备份
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: final-ddd
+            component: backup
+            job-type: database-backup
+        spec:
+          serviceAccountName: final-ddd-migration
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: postgres:15-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "开始数据库备份..."
+              
+              # 创建备份文件名
+              BACKUP_FILE="/backup/final_ddd_$(date +%Y%m%d_%H%M%S).sql"
+              
+              # 执行备份
+              pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME > $BACKUP_FILE
+              
+              # 压缩备份文件
+              gzip $BACKUP_FILE
+              
+              echo "数据库备份完成: ${BACKUP_FILE}.gz"
+              
+              # 清理7天前的备份文件
+              find /backup -name "*.sql.gz" -mtime +7 -delete
+              
+              echo "旧备份文件清理完成"
+            env:
+            - name: DB_HOST
+              value: "postgres-service"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "final_ddd"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db-user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db-password
+            
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+          
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: database-backup-pvc
+          
+          # 节点选择
+          nodeSelector:
+            kubernetes.io/os: linux
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+---
+# 4. 备份存储PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: database-backup-pvc
+  labels:
+    app: final-ddd
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+
+---
+# 5. 迁移ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: final-ddd-migration
+  labels:
+    app: final-ddd
+    component: migration
+automountServiceAccountToken: false
+
+---
+# 6. 迁移Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: final-ddd-migration
+  labels:
+    app: final-ddd
+    component: migration
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+
+---
+# 7. 迁移RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: final-ddd-migration
+  labels:
+    app: final-ddd
+    component: migration
+subjects:
+- kind: ServiceAccount
+  name: final-ddd-migration
+  namespace: default
+roleRef:
+  kind: Role
+  name: final-ddd-migration
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 8. 数据库健康检查Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-health-check
+  labels:
+    app: final-ddd
+    component: health-check
+    job-type: database-health-check
+spec:
+  template:
+    metadata:
+      labels:
+        app: final-ddd
+        component: health-check
+        job-type: database-health-check
+    spec:
+      serviceAccountName: final-ddd-migration
+      restartPolicy: Never
+      containers:
+      - name: health-check
+        image: postgres:15-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "开始数据库健康检查..."
+          
+          # 检查数据库连接
+          if pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; then
+            echo "✓ 数据库连接正常"
+          else
+            echo "✗ 数据库连接失败"
+            exit 1
+          fi
+          
+          # 检查数据库是否存在
+          if psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "SELECT 1;" > /dev/null 2>&1; then
+            echo "✓ 数据库 $DB_NAME 存在且可访问"
+          else
+            echo "✗ 数据库 $DB_NAME 不存在或无法访问"
+            exit 1
+          fi
+          
+          # 检查表是否存在 (假设有users表)
+          if psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'users';" | grep -q "1"; then
+            echo "✓ 数据库表结构正常"
+          else
+            echo "⚠ 数据库表结构可能需要迁移"
+          fi
+          
+          echo "数据库健康检查完成"
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "final_ddd"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-password
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      
+      # 节点选择
+      nodeSelector:
+        kubernetes.io/os: linux

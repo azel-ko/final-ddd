@@ -1,0 +1,73 @@
+# Deployment tasks
+version: '3'
+
+vars:
+  K8S_BASE_DIR: ./deploy/k8s
+  ENVIRONMENTS: dev,staging,prod
+
+tasks:
+  k3s-install:
+    desc: Install k3s cluster
+    cmds:
+      - ./deploy/scripts/install-k3s.sh {{.CLI_ARGS}}
+
+  k3s-setup:
+    desc: Setup k3s cluster with monitoring and cert-manager
+    cmds:
+      - ./deploy/scripts/setup-cluster.sh {{.CLI_ARGS}}
+
+  k3s-uninstall:
+    desc: Uninstall k3s cluster
+    cmds:
+      - /usr/local/bin/k3s-uninstall.sh || echo "k3s not installed"
+
+  validate:
+    desc: Validate Kubernetes manifests
+    cmds:
+      - |
+        for env in {{.ENVIRONMENTS | splitList ","}}; do
+          echo "Validating $env environment..."
+          kubectl apply --dry-run=client -k {{.K8S_BASE_DIR}}/environments/$env
+        done
+
+  dev:
+    desc: Deploy to development environment
+    deps: [validate]
+    cmds:
+      - kubectl apply -k {{.K8S_BASE_DIR}}/environments/dev
+      - kubectl rollout status deployment/dev-final-ddd-app -n final-ddd-dev
+
+  staging:
+    desc: Deploy to staging environment
+    deps: [validate]
+    cmds:
+      - kubectl apply -k {{.K8S_BASE_DIR}}/environments/staging
+      - kubectl rollout status deployment/staging-final-ddd-app -n final-ddd-staging
+
+  prod:
+    desc: Deploy to production environment (with confirmation)
+    deps: [validate]
+    prompt: Are you sure you want to deploy to production?
+    cmds:
+      - kubectl apply -k {{.K8S_BASE_DIR}}/environments/prod
+      - kubectl rollout status deployment/prod-final-ddd-app -n final-ddd-prod
+
+  rollback:
+    desc: Rollback deployment
+    cmds:
+      - |
+        ENV={{.ENV | default "dev"}}
+        kubectl rollout undo deployment/{{.ENV}}-final-ddd-app -n final-ddd-{{.ENV}}
+
+  status:
+    desc: Show deployment status
+    cmds:
+      - |
+        echo "=== Cluster Status ==="
+        kubectl get nodes
+        echo ""
+        echo "=== Namespaces ==="
+        kubectl get namespaces | grep final-ddd
+        echo ""
+        echo "=== Deployments ==="
+        kubectl get deployments --all-namespaces | grep final-ddd

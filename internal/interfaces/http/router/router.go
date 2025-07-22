@@ -11,7 +11,7 @@ import (
 	"github.com/azel-ko/final-ddd/internal/interfaces/http/handlers"
 	"github.com/azel-ko/final-ddd/internal/interfaces/http/middleware"
 	"github.com/azel-ko/final-ddd/pkg/auth"
-	"github.com/azel-ko/final-ddd/pkg/config"
+	"github.com/azel-ko/final-ddd/internal/pkg/config"
 	"github.com/gin-gonic/gin"
 )
 

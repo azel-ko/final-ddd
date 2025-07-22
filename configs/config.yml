@@ -1,17 +1,35 @@
-# configs/config.yml
+# configs/config.yml - PostgreSQL 优先配置
 app:
   name: final-ddd
-  port: 8080  # 改为 8080 以匹配 Dockerfile
-  env: ${APP_ENV:release}
+  port: 8080
+  env: ${APP_ENV:production}
 
+# PostgreSQL 优先数据库配置
 database:
-  type: ${DB_TYPE:postgres}
+  # 推荐使用 URL 方式（优先级最高）
+  url: ${DATABASE_URL:postgresql://postgres:password@postgres:5432/final_ddd?sslmode=disable}
+  
+  # 或者使用分离的字段配置
+  host: ${DB_HOST:postgres}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:final_ddd}
   user: ${DB_USER:postgres}
   password: ${DB_PASSWORD:password}
-  host: ${DATABASE_HOST:postgres}
-  port: ${DATABASE_PORT:5432}
-  name: ${DB_NAME:final_ddd}
-  path: ./sqlite_data
+  ssl_mode: ${DB_SSL_MODE:disable}
+  
+  # 连接池配置
+  pool:
+    max_open: ${DB_MAX_OPEN:25}
+    max_idle: ${DB_MAX_IDLE:5}
+    max_lifetime: ${DB_MAX_LIFETIME:300s}
+  
+  # 向后兼容字段（已弃用，但保留支持）
+  type: ${DB_TYPE:postgres}  # 已弃用：优先使用 url 或具体字段
+  
+  # 备用数据库配置（可选，用于测试）
+  fallback:
+    mysql: ${MYSQL_URL:}
+    sqlite: ${SQLITE_PATH:./data/app.db}
 
 jwt:
   key: ${JWT_SECRET:default_secret_key}

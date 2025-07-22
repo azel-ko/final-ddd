@@ -1,0 +1,138 @@
+# 开发环境监控配置
+# 继承基础配置并覆盖开发环境特定设置
+
+global:
+  namespace: monitoring
+  retention:
+    prometheus: "3d"    # 开发环境短期保留
+    loki: "1d"
+    jaeger: "6h"
+
+# Prometheus 开发环境配置
+prometheus:
+  enabled: true
+  
+  prometheusSpec:
+    # 开发环境较短的保留时间
+    retention: 3d
+    retentionSize: "2GB"
+    
+    # 开发环境较小的存储
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 2Gi
+    
+    # 开发环境较少的资源
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    
+    # 开发环境标签
+    externalLabels:
+      cluster: "k3s-dev"
+      environment: "development"
+
+# Grafana 开发环境配置
+grafana:
+  enabled: true
+  
+  # 开发环境简单密码
+  adminPassword: "dev123"
+  
+  # 开发环境较小存储
+  persistence:
+    size: 500Mi
+  
+  # 开发环境较少资源
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  
+  # 开发环境额外仪表板
+  dashboards:
+    default:
+      # 开发环境特定仪表板
+      development-metrics:
+        json: |
+          {
+            "dashboard": {
+              "title": "Development Environment",
+              "panels": [
+                {
+                  "title": "Request Rate",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "rate(http_requests_total[5m])",
+                      "legendFormat": "{{method}} {{status}}"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+
+# Loki 开发环境配置
+loki:
+  enabled: true
+  
+  # 开发环境较小存储
+  persistence:
+    size: 1Gi
+  
+  # 开发环境配置
+  config:
+    table_manager:
+      retention_period: 24h  # 1天保留
+    
+    limits_config:
+      ingestion_rate_mb: 5   # 较低的摄入速率
+      ingestion_burst_size_mb: 10
+
+# Promtail 开发环境配置
+promtail:
+  enabled: true
+  
+  # 开发环境额外的日志收集
+  config:
+    scrape_configs:
+      # 开发环境特定的日志收集
+      - job_name: development-logs
+        static_configs:
+          - targets:
+              - localhost
+            labels:
+              job: development
+              __path__: /var/log/development/*.log
+
+# Jaeger 开发环境配置
+jaeger:
+  enabled: true  # 开发环境启用链路追踪
+  
+  # 开发环境使用内存存储
+  storage:
+    type: memory
+  
+  # 开发环境较少资源
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# AlertManager 开发环境配置
+alertmanager:
+  enabled: false  # 开发环境禁用告警

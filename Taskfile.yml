@@ -1,0 +1,132 @@
+# Task runner configuration for Final DDD project
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PROJECT_NAME: final-ddd
+  GO_VERSION: 1.23
+  NODE_VERSION: 18
+  DOCKER_REGISTRY: localhost:5000
+  
+env:
+  CGO_ENABLED: 0
+  GOOS: linux
+  GOARCH: amd64
+
+includes:
+  build: ./tasks/build.yml
+  deploy: ./tasks/deploy.yml
+  dev: ./tasks/dev.yml
+  test: ./tasks/test.yml
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Setup development environment
+    cmds:
+      - task: install-tools
+      - task: install-deps
+      - echo "Development environment setup complete!"
+
+  install-tools:
+    desc: Install required development tools
+    cmds:
+      - |
+        echo "Installing development tools..."
+        # Install Task if not present
+        if ! command -v task >/dev/null 2>&1; then
+          echo "Installing Task runner..."
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+        fi
+        # Install kubectl if not present
+        if ! command -v kubectl >/dev/null 2>&1; then
+          echo "Please install kubectl manually"
+        fi
+        # Install helm if not present  
+        if ! command -v helm >/dev/null 2>&1; then
+          echo "Please install helm manually"
+        fi
+
+  install-deps:
+    desc: Install project dependencies
+    cmds:
+      - go mod download
+      - cd frontend && pnpm install
+
+  # 脚本路径更新后的任务
+  build-script:
+    desc: Run build script directly
+    cmds:
+      - ./deploy/scripts/build.sh {{.CLI_ARGS}}
+
+  deploy-script:
+    desc: Run deploy script directly
+    cmds:
+      - ./deploy/scripts/deploy.sh {{.CLI_ARGS}}
+
+  clean:
+    desc: Clean all build artifacts and caches
+    cmds:
+      - task: build:clean
+      - go clean -cache -modcache -testcache
+      - cd frontend && pnpm store prune
+
+  format:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+      - cd frontend && pnpm run format
+
+  check:
+    desc: Run all checks (lint, test, build)
+    cmds:
+      - task: test:lint
+      - task: test:unit
+      - task: build:all
+
+  quick-deploy:
+    desc: Quick build and deploy to dev
+    cmds:
+      - task: build:docker
+      - task: deploy:dev
+
+  full-setup:
+    desc: Complete project setup from scratch
+    cmds:
+      - task: setup
+      - task: deploy:k3s-install
+      - task: deploy:k3s-setup
+      - task: build:all
+      - task: deploy:dev
+      - echo "Full setup complete! Access your app at http://localhost:8080"
+
+  backup:
+    desc: Backup important data
+    cmds:
+      - |
+        BACKUP_DIR="./backups/$(date +%Y%m%d_%H%M%S)"
+        mkdir -p $BACKUP_DIR
+        # Backup database
+        kubectl exec -n final-ddd-dev deployment/dev-postgres -- pg_dump -U postgres final_ddd_dev > $BACKUP_DIR/database.sql
+        # Backup configs
+        cp -r deploy/k8s $BACKUP_DIR/
+        echo "Backup created in $BACKUP_DIR"
+
+  restore:
+    desc: Restore from backup
+    prompt: This will overwrite existing data. Continue?
+    cmds:
+      - |
+        BACKUP_DIR={{.BACKUP_DIR}}
+        if [ -z "$BACKUP_DIR" ]; then
+          echo "Please specify BACKUP_DIR: task restore BACKUP_DIR=./backups/20231201_120000"
+          exit 1
+        fi
+        # Restore database
+        kubectl exec -i -n final-ddd-dev deployment/dev-postgres -- psql -U postgres final_ddd_dev < $BACKUP_DIR/database.sql
+        echo "Restore completed"

@@ -1,0 +1,59 @@
+# cert-manager ClusterIssuer 配置
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    # Let's Encrypt 测试环境服务器
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # 需要替换为实际邮箱
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: traefik
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Let's Encrypt 生产环境服务器
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # 需要替换为实际邮箱
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: traefik
+
+---
+# 通配符证书 ClusterIssuer（使用 DNS 挑战）
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # 需要替换为实际邮箱
+    privateKeySecretRef:
+      name: letsencrypt-dns
+    solvers:
+    - dns01:
+        # 这里需要根据你的 DNS 提供商配置
+        # 示例：Cloudflare
+        cloudflare:
+          email: admin@example.com
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token
+      selector:
+        dnsNames:
+        - "*.example.com"
+        - "example.com"

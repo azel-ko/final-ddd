@@ -6,3 +6,13 @@ bin/
 .idea/
 .vscode/
 vendor/
+# Task runner local config
+.taskfile.yml
+
+# Build artifacts
+build/
+coverage.out
+coverage.html
+
+# Backup files
+backups/

@@ -11,13 +11,16 @@ NC='\033[0m'
 
 # 脚本目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 默认值
+BUILD_TARGET="all"  # all, frontend, backend, docker
 IMAGE_NAME="final-ddd"
 IMAGE_TAG="latest"
 PUSH_TO_REGISTRY=false
-REGISTRY_URL=""
+REGISTRY_URL="localhost:5000"
+SKIP_TESTS=false
+PARALLEL_BUILD=true
 
 # 显示帮助信息
 show_help() {
@@ -25,15 +28,24 @@ show_help() {
     echo
     echo "选项:"
     echo "  -h, --help                显示帮助信息"
-    echo "  -n, --name NAME           镜像名称 [默认: final-ddd]"
-    echo "  -t, --tag TAG             镜像标签 [默认: latest]"
+    echo "  -t, --target TARGET       构建目标 (all|frontend|backend|docker) [默认: all]"
+    echo "  -n, --name NAME           Docker 镜像名称 [默认: final-ddd]"
+    echo "  --tag TAG                 Docker 镜像标签 [默认: latest]"
     echo "  -p, --push                推送到镜像仓库"
-    echo "  -r, --registry URL        镜像仓库地址"
+    echo "  -r, --registry URL        镜像仓库地址 [默认: localhost:5000]"
+    echo "  --skip-tests              跳过测试"
+    echo "  --no-parallel             禁用并行构建"
+    echo
+    echo "构建目标说明:"
+    echo "  all       - 构建前端和后端 (默认)"
+    echo "  frontend  - 仅构建前端"
+    echo "  backend   - 仅构建后端"
+    echo "  docker    - 构建 Docker 镜像"
     echo
     echo "示例:"
-    echo "  $0                                    # 构建本地镜像"
-    echo "  $0 --tag v1.0.0                      # 构建指定标签"
-    echo "  $0 --push --registry localhost:5000  # 构建并推送到本地仓库"
+    echo "  $0                                    # 构建前端和后端"
+    echo "  $0 --target docker --push            # 构建并推送 Docker 镜像"
+    echo "  $0 --target frontend                 # 仅构建前端"
 }
 
 # 解析命令行参数
@@ -44,11 +56,15 @@ parse_args() {
                 show_help
                 exit 0
                 ;;
+            -t|--target)
+                BUILD_TARGET="$2"
+                shift 2
+                ;;
             -n|--name)
                 IMAGE_NAME="$2"
                 shift 2
                 ;;
-            -t|--tag)
+            --tag)
                 IMAGE_TAG="$2"
                 shift 2
                 ;;
@@ -60,8 +76,16 @@ parse_args() {
                 REGISTRY_URL="$2"
                 shift 2
                 ;;
+            --skip-tests)
+                SKIP_TESTS=true
+                shift
+                ;;
+            --no-parallel)
+                PARALLEL_BUILD=false
+                shift
+                ;;
             *)
-                echo -e "${RED}未知选项: $1${NC}"
+                echo "未知选项: $1"
                 show_help
                 exit 1
                 ;;
@@ -69,23 +93,35 @@ parse_args() {
     done
 }
 
-# 检查 Docker
-check_docker() {
-    if ! command -v docker >/dev/null 2>&1; then
-        echo -e "${RED}错误: Docker 未安装${NC}"
+# 检查依赖
+check_dependencies() {
+    echo -e "${BLUE}检查构建依赖...${NC}"
+    
+    local missing_deps=()
+    
+    if [[ "$BUILD_TARGET" == "all" || "$BUILD_TARGET" == "frontend" ]]; then
+        command -v pnpm >/dev/null 2>&1 || missing_deps+=("pnpm")
+        command -v node >/dev/null 2>&1 || missing_deps+=("node")
+    fi
+    
+    if [[ "$BUILD_TARGET" == "all" || "$BUILD_TARGET" == "backend" ]]; then
+        command -v go >/dev/null 2>&1 || missing_deps+=("go")
+    fi
+    
+    if [[ "$BUILD_TARGET" == "docker" ]]; then
+        command -v docker >/dev/null 2>&1 || missing_deps+=("docker")
+    fi
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo -e "${RED}错误: 缺少以下依赖: ${missing_deps[*]}${NC}"
         exit 1
     fi
     
-    if ! docker info >/dev/null 2>&1; then
-        echo -e "${RED}错误: Docker 服务未运行${NC}"
-        exit 1
-    fi
+    echo -e "${GREEN}依赖检查通过${NC}"
 }
 
 # 获取版本信息
 get_version_info() {
-    cd "$PROJECT_ROOT"
-    
     VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "unknown")
     BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
     COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -96,90 +132,163 @@ get_version_info() {
     echo "  提交哈希: $COMMIT_HASH"
 }
 
-# 构建镜像
-build_image() {
-    local full_image_name="$IMAGE_NAME:$IMAGE_TAG"
-    
-    if [[ -n "$REGISTRY_URL" ]]; then
-        full_image_name="$REGISTRY_URL/$IMAGE_NAME:$IMAGE_TAG"
+# 构建前端
+build_frontend() {
+    echo -e "${BLUE}构建前端应用...${NC}"
+    cd "$PROJECT_ROOT/frontend"
+
+    # 检查 node_modules 是否存在
+    if [ ! -d "node_modules" ]; then
+        echo "安装前端依赖..."
+        pnpm install
     fi
-    
-    echo -e "${BLUE}构建镜像: $full_image_name${NC}"
-    
+
+    # 构建前端
+    echo "编译前端代码..."
+    pnpm run build
+
+    # 确保目标目录存在
+    mkdir -p "$PROJECT_ROOT/internal/interfaces/http/router/frontend/dist"
+
+    # 复制构建文件到嵌入目录
+    echo "复制前端构建文件到嵌入目录..."
+    cp -r dist/* "$PROJECT_ROOT/internal/interfaces/http/router/frontend/dist/"
+
+    echo -e "${GREEN}前端构建完成${NC}"
+}
+
+# 构建后端
+build_backend() {
+    echo -e "${BLUE}构建后端应用...${NC}"
     cd "$PROJECT_ROOT"
-    
-    docker build \
-        --build-arg VERSION="$VERSION" \
-        --build-arg BUILD_TIME="$BUILD_TIME" \
-        --build-arg COMMIT_HASH="$COMMIT_HASH" \
-        -t "$full_image_name" \
-        -t "$IMAGE_NAME:latest" \
-        .
-    
-    echo -e "${GREEN}镜像构建完成: $full_image_name${NC}"
-    
-    # 显示镜像信息
-    docker images | grep "$IMAGE_NAME" | head -5
+
+    # 运行测试 (如果未跳过)
+    if [[ "$SKIP_TESTS" != "true" ]]; then
+        echo "运行单元测试..."
+        go test -v ./...
+    fi
+
+    # 构建二进制文件
+    echo "编译 Go 代码..."
+    go build -ldflags "
+        -X 'github.com/azel-ko/final-ddd/internal/pkg/version.Version=$VERSION'
+        -X 'github.com/azel-ko/final-ddd/internal/pkg/version.BuildTime=$BUILD_TIME'
+        -X 'github.com/azel-ko/final-ddd/internal/pkg/version.CommitHash=$COMMIT_HASH'
+    " -o final-ddd ./cmd/main.go
+
+    echo -e "${GREEN}后端构建完成: final-ddd${NC}"
 }
 
-# 推送镜像
-push_image() {
+# 构建 Docker 镜像
+build_docker() {
+    echo -e "${BLUE}构建 Docker 镜像...${NC}"
+    cd "$PROJECT_ROOT"
+
+    # 确保应用已构建
+    if [[ ! -f "final-ddd" ]]; then
+        echo "二进制文件不存在，先构建应用..."
+        build_backend
+    fi
+
+    # 构建 Docker 镜像
+    echo "构建 Docker 镜像: $IMAGE_NAME:$IMAGE_TAG"
+    docker build -t "$IMAGE_NAME:$IMAGE_TAG" .
+    
+    # 如果指定了版本标签，也打上版本标签
+    if [[ "$IMAGE_TAG" != "$VERSION" && "$VERSION" != "unknown" ]]; then
+        docker tag "$IMAGE_NAME:$IMAGE_TAG" "$IMAGE_NAME:$VERSION"
+        echo "已标记版本: $IMAGE_NAME:$VERSION"
+    fi
+
+    # 推送到仓库
     if [[ "$PUSH_TO_REGISTRY" == "true" ]]; then
-        if [[ -z "$REGISTRY_URL" ]]; then
-            echo -e "${RED}错误: 推送镜像需要指定仓库地址${NC}"
-            exit 1
+        echo "推送镜像到仓库: $REGISTRY_URL"
+        
+        # 重新标记为仓库地址
+        docker tag "$IMAGE_NAME:$IMAGE_TAG" "$REGISTRY_URL/$IMAGE_NAME:$IMAGE_TAG"
+        docker push "$REGISTRY_URL/$IMAGE_NAME:$IMAGE_TAG"
+        
+        if [[ "$IMAGE_TAG" != "$VERSION" && "$VERSION" != "unknown" ]]; then
+            docker tag "$IMAGE_NAME:$VERSION" "$REGISTRY_URL/$IMAGE_NAME:$VERSION"
+            docker push "$REGISTRY_URL/$IMAGE_NAME:$VERSION"
         fi
         
-        local full_image_name="$REGISTRY_URL/$IMAGE_NAME:$IMAGE_TAG"
-        
-        echo -e "${BLUE}推送镜像: $full_image_name${NC}"
-        
-        # 检查仓库是否可访问
-        if ! curl -s "$REGISTRY_URL/v2/" >/dev/null 2>&1; then
-            echo -e "${YELLOW}警告: 无法访问镜像仓库 $REGISTRY_URL${NC}"
-            echo "请确保仓库服务正在运行"
-        fi
-        
-        docker push "$full_image_name"
-        
-        echo -e "${GREEN}镜像推送完成: $full_image_name${NC}"
+        echo -e "${GREEN}镜像推送完成${NC}"
     fi
+
+    echo -e "${GREEN}Docker 镜像构建完成${NC}"
 }
 
-# 清理旧镜像
-cleanup_old_images() {
-    echo -e "${BLUE}清理悬空镜像...${NC}"
+# 清理构建产物
+clean_build() {
+    echo -e "${BLUE}清理构建产物...${NC}"
     
-    # 删除悬空镜像
-    if docker images -f "dangling=true" -q | grep -q .; then
-        docker rmi $(docker images -f "dangling=true" -q) 2>/dev/null || true
-        echo -e "${GREEN}悬空镜像清理完成${NC}"
-    else
-        echo "没有悬空镜像需要清理"
+    rm -f final-ddd
+    rm -rf build/
+    rm -f coverage.out coverage.html
+    
+    if [[ -d "frontend/dist" ]]; then
+        rm -rf frontend/dist/
     fi
+    
+    if [[ -d "internal/interfaces/http/router/frontend/dist" ]]; then
+        rm -rf internal/interfaces/http/router/frontend/dist/
+    fi
+    
+    echo -e "${GREEN}清理完成${NC}"
 }
 
 # 主函数
 main() {
-    echo -e "${GREEN}开始构建 Final DDD 应用镜像${NC}"
-    echo "========================================"
+    echo -e "${GREEN}=== Final DDD 构建脚本 ===${NC}"
     
     parse_args "$@"
-    check_docker
+    check_dependencies
     get_version_info
-    build_image
-    push_image
-    cleanup_old_images
     
-    echo -e "${GREEN}构建完成！${NC}"
-    echo "========================================"
+    case $BUILD_TARGET in
+        frontend)
+            build_frontend
+            ;;
+        backend)
+            build_backend
+            ;;
+        docker)
+            # Docker 构建需要先构建应用
+            if [[ "$PARALLEL_BUILD" == "true" ]]; then
+                build_frontend &
+                build_backend &
+                wait
+            else
+                build_frontend
+                build_backend
+            fi
+            build_docker
+            ;;
+        all)
+            if [[ "$PARALLEL_BUILD" == "true" ]]; then
+                build_frontend &
+                build_backend &
+                wait
+            else
+                build_frontend
+                build_backend
+            fi
+            ;;
+        clean)
+            clean_build
+            ;;
+        *)
+            echo -e "${RED}未知的构建目标: $BUILD_TARGET${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
     
-    if [[ -n "$REGISTRY_URL" ]]; then
-        echo "镜像地址: $REGISTRY_URL/$IMAGE_NAME:$IMAGE_TAG"
-    else
-        echo "本地镜像: $IMAGE_NAME:$IMAGE_TAG"
-    fi
+    echo -e "${GREEN}=== 构建完成 ===${NC}"
 }
 
-# 执行主函数
-main "$@"
+# 如果直接运行脚本，执行主函数
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

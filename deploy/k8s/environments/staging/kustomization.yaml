@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 基础资源
+resources:
+- ../../base/namespace.yaml
+- ../../base/configmap.yaml
+- ../../base/secret.yaml
+- ../../base/postgres.yaml
+- ../../base/deployment.yaml
+- ../../base/service.yaml
+- ../../base/ingress.yaml
+- ../../base/traefik-config.yaml
+- ../../base/cert-manager.yaml
+- staging-middlewares.yaml
+
+# 命名空间
+namespace: final-ddd-staging
+
+# 名称前缀
+namePrefix: staging-
+
+# 标签
+commonLabels:
+  environment: staging
+  version: beta
+
+# 镜像替换
+images:
+- name: final-ddd
+  newTag: staging-latest
+
+# 配置补丁
+patchesStrategicMerge:
+- patches.yaml
+
+# ConfigMap 生成器 - PostgreSQL 优先配置
+configMapGenerator:
+- name: app-config
+  behavior: merge
+  literals:
+  - APP_ENV=staging
+  - LOG_LEVEL=info
+  - DB_NAME=final_ddd_staging
+  - DB_HOST=postgres-staging
+  - DB_PORT=5432
+  - DB_USER=postgres
+  - DB_SSL_MODE=require
+  - DB_MAX_OPEN=20
+  - DB_MAX_IDLE=5
+  files:
+  - config.yml=staging-config.yml
+
+# Secret 生成器 - PostgreSQL 优先
+secretGenerator:
+- name: app-secrets
+  behavior: merge
+  literals:
+  - database-url=postgresql://postgres:staging_password@staging-postgres-service:5432/final_ddd_staging?sslmode=require
+  - db-password=staging_password
+  - jwt-secret=staging_jwt_secret_key

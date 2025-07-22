@@ -1,0 +1,334 @@
+# Network Policies for Final DDD Application
+# 这些策略提供网络级别的安全控制
+
+# 1. 默认拒绝所有入站流量的策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app: final-ddd
+    policy-type: security
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# 2. 允许后端应用接收流量的策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: final-ddd-backend-ingress
+  labels:
+    app: final-ddd
+    component: backend
+    policy-type: ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: final-ddd
+      component: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  # 允许来自Ingress Controller的流量
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # 允许来自前端的流量
+  - from:
+    - podSelector:
+        matchLabels:
+          app: final-ddd
+          component: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # 允许来自监控系统的流量
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  
+  # 允许同一命名空间内的健康检查
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# 3. 允许前端应用接收流量的策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: final-ddd-frontend-ingress
+  labels:
+    app: final-ddd
+    component: frontend
+    policy-type: ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: final-ddd
+      component: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  # 允许来自Ingress Controller的流量
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 80
+  
+  # 允许来自外部负载均衡器的流量
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 80
+
+---
+# 4. 后端应用出站流量策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: final-ddd-backend-egress
+  labels:
+    app: final-ddd
+    component: backend
+    policy-type: egress
+spec:
+  podSelector:
+    matchLabels:
+      app: final-ddd
+      component: backend
+  policyTypes:
+  - Egress
+  egress:
+  # 允许访问PostgreSQL数据库
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+          component: database
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # 允许访问Redis缓存
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+          component: cache
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # 允许访问Kubernetes API (用于健康检查等)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  
+  # 允许DNS查询
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # 允许访问监控系统 (Loki)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    ports:
+    - protocol: TCP
+      port: 3100
+  
+  # 允许HTTPS出站流量 (用于外部API调用)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+---
+# 5. PostgreSQL数据库入站流量策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-ingress
+  labels:
+    app: postgres
+    component: database
+    policy-type: ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+      component: database
+  policyTypes:
+  - Ingress
+  ingress:
+  # 只允许来自后端应用的连接
+  - from:
+    - podSelector:
+        matchLabels:
+          app: final-ddd
+          component: backend
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # 允许来自监控系统的连接 (如果有PostgreSQL exporter)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgres-exporter
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# 6. Redis缓存入站流量策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-ingress
+  labels:
+    app: redis
+    component: cache
+    policy-type: ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+      component: cache
+  policyTypes:
+  - Ingress
+  ingress:
+  # 只允许来自后端应用的连接
+  - from:
+    - podSelector:
+        matchLabels:
+          app: final-ddd
+          component: backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # 允许来自监控系统的连接 (如果有Redis exporter)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis-exporter
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+# 7. 监控命名空间访问策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-access
+  labels:
+    app: final-ddd
+    policy-type: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: final-ddd
+  policyTypes:
+  - Ingress
+  ingress:
+  # 允许Prometheus抓取指标
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  
+  # 允许Grafana访问 (如果需要直接访问)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# 8. 开发环境宽松策略 (仅用于开发环境)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-allow-all
+  labels:
+    app: final-ddd
+    policy-type: development
+    environment: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: final-ddd
+      environment: dev
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - {}
+  egress:
+  - {}

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/azel-ko/final-ddd/pkg/logger"
+	"github.com/azel-ko/final-ddd/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"time"

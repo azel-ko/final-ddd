@@ -1,0 +1,51 @@
+# Build tasks
+version: '3'
+
+vars:
+  BUILD_DIR: ./build
+  BINARY_NAME: final-ddd
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "unknown"
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%d %H:%M:%S'
+  COMMIT_HASH:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+
+tasks:
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -f {{.BINARY_NAME}}
+      - docker rmi {{.PROJECT_NAME}}:latest 2>/dev/null || true
+
+  frontend:
+    desc: Build frontend application
+    sources:
+      - frontend/src/**/*
+      - frontend/package.json
+      - frontend/pnpm-lock.yaml
+    generates:
+      - frontend/dist/**/*
+    cmds:
+      - ./deploy/scripts/build.sh --target frontend
+
+  backend:
+    desc: Build backend binary
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY_NAME}}"
+    cmds:
+      - ./deploy/scripts/build.sh --target backend
+
+  all:
+    desc: Build both frontend and backend
+    deps: [frontend, backend]
+
+  docker:
+    desc: Build Docker image
+    cmds:
+      - ./deploy/scripts/build.sh --target docker

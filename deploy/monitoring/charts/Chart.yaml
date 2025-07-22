@@ -1,0 +1,44 @@
+# 监控栈 Helm Chart
+apiVersion: v2
+name: final-ddd-monitoring
+description: Complete monitoring stack for Final DDD application
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+keywords:
+  - monitoring
+  - prometheus
+  - grafana
+  - loki
+  - observability
+
+maintainers:
+  - name: Final DDD Team
+    email: admin@example.com
+
+dependencies:
+  # Prometheus 监控栈
+  - name: kube-prometheus-stack
+    version: "55.5.0"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+    alias: prometheus
+
+  # Grafana Loki 日志聚合
+  - name: loki
+    version: "5.41.4"
+    repository: https://grafana.github.io/helm-charts
+    condition: loki.enabled
+
+  # Grafana Promtail 日志收集
+  - name: promtail
+    version: "6.15.3"
+    repository: https://grafana.github.io/helm-charts
+    condition: promtail.enabled
+
+  # Jaeger 链路追踪（可选）
+  - name: jaeger
+    version: "0.71.14"
+    repository: https://jaegertracing.github.io/helm-charts
+    condition: jaeger.enabled

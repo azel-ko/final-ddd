@@ -1,0 +1,35 @@
+# 测试环境配置覆盖
+app:
+  env: staging
+
+database:
+  # 测试环境 PostgreSQL 配置
+  url: ${DATABASE_URL:postgresql://postgres:staging_password@postgres-staging:5432/final_ddd_staging?sslmode=require}
+  host: ${DB_HOST:postgres-staging}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:final_ddd_staging}
+  user: ${DB_USER:postgres}
+  password: ${DB_PASSWORD:staging_password}
+  ssl_mode: ${DB_SSL_MODE:require}
+  
+  # 测试环境连接池配置（中等）
+  pool:
+    max_open: ${DB_MAX_OPEN:20}
+    max_idle: ${DB_MAX_IDLE:5}
+    max_lifetime: ${DB_MAX_LIFETIME:300s}
+
+log:
+  level: ${LOG_LEVEL:info}
+  output: ${LOG_OUTPUT:stdout}
+
+# 测试环境监控配置
+monitoring:
+  metrics:
+    enabled: ${METRICS_ENABLED:true}
+    port: ${METRICS_PORT:9090}
+  loki:
+    enabled: ${LOKI_ENABLED:true}
+    endpoint: ${LOKI_ENDPOINT:http://loki-staging:3100}
+  tracing:
+    enabled: ${TRACING_ENABLED:true}
+    jaeger_endpoint: ${JAEGER_ENDPOINT:http://jaeger-staging:14268/api/traces}

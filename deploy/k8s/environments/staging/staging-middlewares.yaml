@@ -1,0 +1,70 @@
+# 测试环境特定的 Traefik 中间件
+
+# 测试环境安全头（中等安全级别）
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: staging-security-headers
+  namespace: final-ddd-staging
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: https
+    customResponseHeaders:
+      X-Frame-Options: DENY
+      X-Content-Type-Options: nosniff
+      X-XSS-Protection: "1; mode=block"
+      Strict-Transport-Security: "max-age=86400; includeSubDomains"  # 24小时
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      X-Environment: "staging"
+
+---
+# 测试环境速率限制（中等限制）
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: staging-rate-limit
+  namespace: final-ddd-staging
+spec:
+  rateLimit:
+    burst: 150
+    average: 75
+
+---
+# 测试环境压缩中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: staging-compress
+  namespace: final-ddd-staging
+spec:
+  compress: {}
+
+---
+# 测试环境错误页面中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: staging-error-pages
+  namespace: final-ddd-staging
+spec:
+  errors:
+    status:
+      - "404"
+      - "500-599"
+    service:
+      name: final-ddd-service
+      port: 8080
+    query: "/error/{status}"
+
+---
+# 测试环境监控访问控制
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: staging-metrics-auth
+  namespace: final-ddd-staging
+spec:
+  basicAuth:
+    secret: staging-metrics-auth

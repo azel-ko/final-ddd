@@ -1,0 +1,53 @@
+# 开发环境配置 - PostgreSQL 优先
+app:
+  name: final-ddd
+  port: 8080
+  env: development
+
+# PostgreSQL 优先数据库配置
+database:
+  # 开发环境使用本地 PostgreSQL
+  url: postgresql://postgres:dev_password@localhost:5432/final_ddd_dev?sslmode=disable
+  
+  host: localhost
+  port: 5432
+  name: final_ddd_dev
+  user: postgres
+  password: dev_password
+  ssl_mode: disable
+  
+  # 开发环境连接池配置（较小）
+  pool:
+    max_open: 10
+    max_idle: 2
+    max_lifetime: 300s
+  
+  # 向后兼容
+  type: postgres
+  
+  # 开发环境备用配置
+  fallback:
+    sqlite: "./data/dev.db"
+
+jwt:
+  key: dev_jwt_secret_key
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+log:
+  level: debug
+  format: json
+  output: stdout
+
+monitoring:
+  metrics:
+    enabled: true
+    port: 9090
+  loki:
+    enabled: false
+  tracing:
+    enabled: false

@@ -1,0 +1,80 @@
+# Development tasks
+version: '3'
+
+tasks:
+  run:
+    desc: Run application locally
+    deps: [build:backend]
+    cmds:
+      - ./{{.BINARY_NAME}}
+
+  run-frontend:
+    desc: Run frontend development server
+    dir: frontend
+    cmds:
+      - pnpm run dev
+
+  run-backend:
+    desc: Run backend with hot reload
+    cmds:
+      - |
+        if command -v air >/dev/null 2>&1; then
+          air
+        else
+          echo "Installing air for hot reload..."
+          go install github.com/cosmtrek/air@latest
+          air
+        fi
+
+  db-migrate:
+    desc: Run database migrations
+    cmds:
+      - go run ./cmd/migrate/main.go up
+
+  db-seed:
+    desc: Seed database with test data
+    cmds:
+      - go run ./cmd/seed/main.go
+
+  db-reset:
+    desc: Reset database (drop and recreate)
+    prompt: This will delete all data. Are you sure?
+    cmds:
+      - go run ./cmd/migrate/main.go down
+      - go run ./cmd/migrate/main.go up
+      - task: db-seed
+
+  logs:
+    desc: Show application logs
+    cmds:
+      - |
+        ENV={{.ENV | default "dev"}}
+        kubectl logs -f -l app=final-ddd -n final-ddd-{{.ENV}}
+
+  shell:
+    desc: Get shell access to running pod
+    cmds:
+      - |
+        ENV={{.ENV | default "dev"}}
+        POD=$(kubectl get pods -l app=final-ddd -n final-ddd-{{.ENV}} -o jsonpath='{.items[0].metadata.name}')
+        kubectl exec -it $POD -n final-ddd-{{.ENV}} -- /bin/sh
+
+  port-forward:
+    desc: Forward application port to localhost
+    cmds:
+      - |
+        ENV={{.ENV | default "dev"}}
+        echo "Forwarding http://localhost:8080"
+        kubectl port-forward svc/{{.ENV}}-final-ddd-service 8080:8080 -n final-ddd-{{.ENV}}
+
+  monitoring:
+    desc: Access monitoring dashboards
+    cmds:
+      - |
+        echo "Starting port forwards for monitoring..."
+        echo "Grafana: http://localhost:3000 (admin/admin123)"
+        echo "Prometheus: http://localhost:9090"
+        echo "Press Ctrl+C to stop"
+        kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80 &
+        kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090 &
+        wait

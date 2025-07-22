@@ -1,0 +1,93 @@
+# 开发环境补丁
+
+# 应用部署补丁 - 降低资源要求
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: final-ddd-app
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: app
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        env:
+        - name: APP_ENV
+          value: "development"
+        - name: LOG_LEVEL
+          value: "debug"
+
+---
+# PostgreSQL 部署补丁 - 降低资源要求
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  template:
+    spec:
+      containers:
+      - name: postgres
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+
+---
+# PVC 补丁 - 减少存储大小
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+# Ingress 补丁 - 开发环境配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: final-ddd-ingress
+  annotations:
+    # 开发环境使用 staging 证书
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    # 开发环境中间件配置
+    traefik.ingress.kubernetes.io/router.middlewares: final-ddd-dev-security-headers@kubernetescrd,final-ddd-dev-compress@kubernetescrd
+    # 开发环境允许不安全连接
+    traefik.ingress.kubernetes.io/router.tls: "false"
+spec:
+  tls:
+  - hosts:
+    - dev.app.local
+    secretName: dev-tls-secret
+  rules:
+  - host: dev.app.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 8080
+      # 开发环境特定路径
+      - path: /api/debug
+        pathType: Prefix
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 8080

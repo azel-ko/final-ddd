@@ -1,0 +1,33 @@
+# 开发环境配置覆盖
+app:
+  env: development
+
+database:
+  # 开发环境 PostgreSQL 配置
+  url: ${DATABASE_URL:postgresql://postgres:dev_password@localhost:5432/final_ddd_dev?sslmode=disable}
+  host: ${DB_HOST:localhost}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:final_ddd_dev}
+  user: ${DB_USER:postgres}
+  password: ${DB_PASSWORD:dev_password}
+  ssl_mode: ${DB_SSL_MODE:disable}
+  
+  # 开发环境连接池配置（较小）
+  pool:
+    max_open: ${DB_MAX_OPEN:10}
+    max_idle: ${DB_MAX_IDLE:2}
+    max_lifetime: ${DB_MAX_LIFETIME:300s}
+
+log:
+  level: ${LOG_LEVEL:debug}
+  output: ${LOG_OUTPUT:stdout}
+
+# 开发环境监控配置
+monitoring:
+  metrics:
+    enabled: ${METRICS_ENABLED:true}
+    port: ${METRICS_PORT:9090}
+  loki:
+    enabled: ${LOKI_ENABLED:false}
+  tracing:
+    enabled: ${TRACING_ENABLED:false}

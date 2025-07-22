@@ -1,0 +1,134 @@
+# k3s Traefik 配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik
+data:
+  traefik.yml: |
+    # Traefik 静态配置
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
+    
+    # 入口点配置
+    entryPoints:
+      web:
+        address: ":80"
+        http:
+          redirections:
+            entrypoint:
+              to: websecure
+              scheme: https
+              permanent: true
+      websecure:
+        address: ":443"
+        http:
+          tls:
+            options: default
+    
+    # 提供者配置
+    providers:
+      kubernetesIngress:
+        publishedService:
+          enabled: true
+      kubernetesCRD:
+        enabled: true
+        allowCrossNamespace: true
+    
+    # 证书解析器配置
+    certificatesResolvers:
+      letsencrypt-staging:
+        acme:
+          email: admin@example.com
+          storage: /data/acme.json
+          httpChallenge:
+            entryPoint: web
+          caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      letsencrypt-prod:
+        acme:
+          email: admin@example.com
+          storage: /data/acme.json
+          httpChallenge:
+            entryPoint: web
+          caServer: https://acme-v02.api.letsencrypt.org/directory
+    
+    # API 和仪表板配置
+    api:
+      dashboard: true
+      insecure: false
+    
+    # 指标配置
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addServicesLabels: true
+    
+    # 日志配置
+    log:
+      level: INFO
+      format: json
+    
+    accessLog:
+      format: json
+      fields:
+        defaultMode: keep
+        names:
+          ClientUsername: drop
+        headers:
+          defaultMode: keep
+          names:
+            User-Agent: redact
+            Authorization: drop
+            Content-Type: keep
+
+---
+# Traefik 仪表板 Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dashboard
+  namespace: kube-system
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-auth@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+  - host: traefik.local  # 需要替换为实际域名
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: traefik
+            port:
+              number: 9000
+
+---
+# 基本认证中间件（用于 Traefik 仪表板）
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: auth
+  namespace: kube-system
+spec:
+  basicAuth:
+    secret: traefik-dashboard-auth
+
+---
+# Traefik 仪表板认证密钥
+apiVersion: v1
+kind: Secret
+metadata:
+  name: traefik-dashboard-auth
+  namespace: kube-system
+type: Opaque
+data:
+  # admin:admin (使用 htpasswd 生成)
+  # htpasswd -nb admin admin
+  users: YWRtaW46JGFwcjEkSDY1dnVhNzAkSWlIWUlpZ1B4dkZJdXpPNzFjRzFoLgoK

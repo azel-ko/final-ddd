@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: final-ddd
+  labels:
+    app: final-ddd
+    component: config
+data:
+  # 应用配置
+  APP_NAME: "final-ddd"
+  APP_PORT: "8080"
+  APP_ENV: "production"
+  
+  # PostgreSQL 数据库配置（默认和推荐）
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "final_ddd"
+  DB_USER: "postgres"
+  DB_SSL_MODE: "disable"
+  
+  # 数据库连接池配置
+  DB_MAX_OPEN: "25"
+  DB_MAX_IDLE: "5"
+  DB_MAX_LIFETIME: "300s"
+  
+  # Redis 配置
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  
+  # 日志配置
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LOG_OUTPUT: "stdout"
+  
+  # 监控配置
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  METRICS_PATH: "/metrics"
+  
+  # 应用配置文件 - PostgreSQL 优先
+  config.yml: |
+    app:
+      name: final-ddd
+      port: 8080
+      env: production
+    
+    # PostgreSQL 优先数据库配置
+    database:
+      # 推荐使用 URL 方式（优先级最高）
+      url: postgresql://postgres:${DB_PASSWORD}@postgres-service:5432/final_ddd?sslmode=disable
+      
+      # 或者使用分离的字段配置
+      host: postgres-service
+      port: 5432
+      name: final_ddd
+      user: postgres
+      ssl_mode: disable
+      
+      # 连接池配置
+      pool:
+        max_open: 25
+        max_idle: 5
+        max_lifetime: 300s
+      
+      # 向后兼容字段（已弃用，但保留支持）
+      type: postgres
+      
+      # 备用数据库配置（可选，用于测试）
+      fallback:
+        mysql: ""
+        sqlite: "./data/app.db"
+    
+    jwt:
+      key: ${JWT_SECRET}
+    
+    redis:
+      host: redis-service
+      port: 6379
+      password: ""
+      db: 0
+    
+    log:
+      level: info
+      format: json
+      output: stdout
+      file_path: /var/log/app/app.log
+      max_size: 100
+      max_backups: 5
+      max_age: 30
+      compress: true
+    
+    monitoring:
+      metrics:
+        enabled: true
+        port: 9090
+        path: /metrics
+      loki:
+        enabled: false
+        endpoint: http://loki:3100
+      tracing:
+        enabled: false
+        jaeger_endpoint: http://jaeger:14268/api/traces

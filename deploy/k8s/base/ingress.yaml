@@ -1,0 +1,104 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: final-ddd-ingress
+  namespace: final-ddd
+  labels:
+    app: final-ddd
+    component: ingress
+  annotations:
+    # k3s Traefik 简化配置
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: final-ddd-redirect-https@kubernetescrd,final-ddd-security-headers@kubernetescrd
+    
+    # 自动 HTTPS 重定向
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    
+    # 证书管理（如果安装了 cert-manager）
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - app.example.com  # 需要替换为实际域名
+    secretName: app-tls-secret
+  rules:
+  - host: app.example.com  # 需要替换为实际域名
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 8080
+
+---
+# HTTPS 重定向中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: final-ddd
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+
+---
+# 安全头中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: final-ddd
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: https
+    customResponseHeaders:
+      X-Frame-Options: DENY
+      X-Content-Type-Options: nosniff
+      X-XSS-Protection: "1; mode=block"
+      Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+
+---
+# 速率限制中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+  namespace: final-ddd
+spec:
+  rateLimit:
+    burst: 100
+    average: 50
+
+---
+# 压缩中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: compress
+  namespace: final-ddd
+spec:
+  compress: {}
+
+---
+# 错误页面中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: error-pages
+  namespace: final-ddd
+spec:
+  errors:
+    status:
+      - "404"
+      - "500-599"
+    service:
+      name: final-ddd-service
+      port: 8080
+    query: "/error/{status}"

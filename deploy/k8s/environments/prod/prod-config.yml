@@ -1,0 +1,56 @@
+# 生产环境配置 - PostgreSQL 优先
+app:
+  name: final-ddd
+  port: 8080
+  env: production
+
+# PostgreSQL 优先数据库配置
+database:
+  # 生产环境使用安全的 PostgreSQL 连接
+  url: postgresql://postgres:${POSTGRES_PASSWORD}@postgres-prod:5432/final_ddd?sslmode=require
+  
+  host: postgres-prod
+  port: 5432
+  name: final_ddd
+  user: postgres
+  ssl_mode: require
+  
+  # 生产环境连接池配置（较大）
+  pool:
+    max_open: 50
+    max_idle: 10
+    max_lifetime: 600s
+  
+  # 向后兼容
+  type: postgres
+
+jwt:
+  key: ${JWT_SECRET}
+
+redis:
+  host: redis-prod
+  port: 6379
+  password: ${REDIS_PASSWORD}
+  db: 0
+
+log:
+  level: info
+  format: json
+  output: file
+  file_path: /var/log/app/app.log
+  max_size: 100
+  max_backups: 10
+  max_age: 30
+  compress: true
+
+monitoring:
+  metrics:
+    enabled: true
+    port: 9090
+    path: /metrics
+  loki:
+    enabled: true
+    endpoint: http://loki:3100
+  tracing:
+    enabled: true
+    jaeger_endpoint: http://jaeger:14268/api/traces

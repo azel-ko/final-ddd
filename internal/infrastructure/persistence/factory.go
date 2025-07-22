@@ -6,8 +6,8 @@ import (
 	"github.com/azel-ko/final-ddd/internal/infrastructure/persistence/mysql"
 	"github.com/azel-ko/final-ddd/internal/infrastructure/persistence/postgres"
 	"github.com/azel-ko/final-ddd/internal/infrastructure/persistence/sqlite"
-	"github.com/azel-ko/final-ddd/pkg/config"
-	"github.com/azel-ko/final-ddd/pkg/logger"
+	"github.com/azel-ko/final-ddd/internal/pkg/config"
+	"github.com/azel-ko/final-ddd/internal/pkg/logger"
 	gorm_mysql "gorm.io/driver/mysql"
 	gorm_postgres "gorm.io/driver/postgres"
 	gorm_sqlite "gorm.io/driver/sqlite"
@@ -15,46 +15,53 @@ import (
 )
 
 func NewRepository(cfg *config.Config) (repository.Repository, *gorm.DB, error) {
-
 	var db *gorm.DB
 	var err error
 
-	switch cfg.Database.Type {
-	case "mysql":
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			cfg.Database.User, cfg.Database.Password,
-			cfg.Database.Host, cfg.Database.Port, cfg.Database.Name)
-		db, err = gorm.Open(gorm_mysql.Open(dsn), &gorm.Config{})
+	// 使用新的配置方法获取数据库连接字符串
+	dbURL := cfg.Database.GetDatabaseURL()
+	driverName := cfg.Database.GetDriverName()
+
+	// PostgreSQL 优先的数据库连接
+	switch driverName {
 	case "postgres":
-		dsn := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable",
-			cfg.Database.User, cfg.Database.Password,
-			cfg.Database.Host, cfg.Database.Port, cfg.Database.Name)
-		db, err = gorm.Open(gorm_postgres.Open(dsn), &gorm.Config{})
-	case "sqlite":
-		dbPath := fmt.Sprintf("/%s/%s/%s.db", cfg.Database.Path, cfg.Database.Host, cfg.Database.Name) // 指定SQLite数据库文件路径
-		db, err = gorm.Open(gorm_sqlite.Open(dbPath), &gorm.Config{})
-	default:
-		return nil, nil, fmt.Errorf("unsupported database type: %s", cfg.Database.Type)
-	}
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	defer func() {
-		if err == nil {
-			logger.Info("Database setup completed")
+		db, err = gorm.Open(gorm_postgres.Open(dbURL), &gorm.Config{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 		}
-	}()
-
-	switch cfg.Database.Type {
-	case "mysql":
-		return mysql.NewMySQLRepository(db), db, nil
-	case "postgres":
+		
+		// 配置连接池
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.SetMaxOpenConns(cfg.Database.Pool.MaxOpen)
+			sqlDB.SetMaxIdleConns(cfg.Database.Pool.MaxIdle)
+			// 注意：MaxLifetime 需要解析时间字符串，这里简化处理
+		}
+		
+		logger.Info("Connected to PostgreSQL database")
 		return postgres.NewPostgresRepository(db), db, nil
-	case "sqlite":
+		
+	case "mysql":
+		db, err = gorm.Open(gorm_mysql.Open(dbURL), &gorm.Config{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to connect to MySQL: %w", err)
+		}
+		logger.Info("Connected to MySQL database")
+		return mysql.NewMySQLRepository(db), db, nil
+		
+	case "sqlite3":
+		// SQLite 使用路径而不是 URL
+		dbPath := cfg.Database.Path
+		if dbPath == "" {
+			dbPath = "./data/app.db"
+		}
+		db, err = gorm.Open(gorm_sqlite.Open(dbPath), &gorm.Config{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to connect to SQLite: %w", err)
+		}
+		logger.Info("Connected to SQLite database")
 		return sqlite.NewSQLiteRepository(db), db, nil
+		
 	default:
-		return nil, nil, fmt.Errorf("unsupported database type: %s", cfg.Database.Type)
+		return nil, nil, fmt.Errorf("unsupported database driver: %s", driverName)
 	}
 }

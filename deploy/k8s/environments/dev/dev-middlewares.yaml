@@ -1,0 +1,53 @@
+# 开发环境特定的 Traefik 中间件
+
+# 开发环境安全头（较宽松）
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: dev-security-headers
+  namespace: final-ddd-dev
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: http
+    customResponseHeaders:
+      X-Frame-Options: SAMEORIGIN  # 开发环境较宽松
+      X-Content-Type-Options: nosniff
+      X-XSS-Protection: "1; mode=block"
+      # 开发环境不强制 HTTPS
+      Access-Control-Allow-Origin: "*"  # 开发环境允许跨域
+
+---
+# 开发环境压缩中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: dev-compress
+  namespace: final-ddd-dev
+spec:
+  compress: {}
+
+---
+# 开发环境调试中间件
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: dev-debug-headers
+  namespace: final-ddd-dev
+spec:
+  headers:
+    customResponseHeaders:
+      X-Debug-Mode: "true"
+      X-Environment: "development"
+
+---
+# 开发环境速率限制（较宽松）
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: dev-rate-limit
+  namespace: final-ddd-dev
+spec:
+  rateLimit:
+    burst: 200  # 开发环境更高的突发限制
+    average: 100

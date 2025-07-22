@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"github.com/azel-ko/final-ddd/pkg/logger"
+	"github.com/azel-ko/final-ddd/internal/pkg/logger"
 	redis "github.com/go-redis/redis/v8"
 	"time"
 )

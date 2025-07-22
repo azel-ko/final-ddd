@@ -1,0 +1,274 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: final-ddd-app
+  labels:
+    app: final-ddd
+    component: backend
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: final-ddd
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: final-ddd
+        component: backend
+        version: v1
+      annotations:
+        # Prometheus监控注解
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        # 配置版本注解，用于触发重新部署
+        config.version: "1"
+    spec:
+      serviceAccountName: final-ddd-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: app
+        image: final-ddd:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        # 应用基础配置
+        - name: APP_ENV
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: LOG_FORMAT
+          value: "json"
+        - name: LOG_OUTPUT
+          value: "stdout"
+        
+        # 数据库配置 - PostgreSQL优先
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "final_ddd"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-password
+        - name: DB_SSL_MODE
+          value: "disable"
+        - name: DB_MAX_OPEN
+          value: "25"
+        - name: DB_MAX_IDLE
+          value: "5"
+        - name: DB_MAX_LIFETIME
+          value: "300s"
+        
+        # Redis配置
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: redis-password
+              optional: true
+        
+        # JWT配置
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: jwt-secret
+        
+        # 监控配置
+        - name: METRICS_ENABLED
+          value: "true"
+        - name: METRICS_PORT
+          value: "9090"
+        - name: METRICS_PATH
+          value: "/metrics"
+        - name: LOKI_ENABLED
+          value: "true"
+        - name: LOKI_ENDPOINT
+          value: "http://loki-service.monitoring.svc.cluster.local:3100"
+        
+        # 从ConfigMap加载配置
+        envFrom:
+        - configMapRef:
+            name: app-config
+        
+        # 健康检查
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # 启动探针
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        
+        # 资源限制
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        # 安全上下文
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+        
+        # 挂载卷
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/configs
+          readOnly: true
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      # 定义卷
+      volumes:
+      - name: config-volume
+        configMap:
+          name: app-config
+      - name: logs-volume
+        emptyDir: {}
+      - name: tmp-volume
+        emptyDir: {}
+      
+      # 节点选择和容忍度
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # Pod反亲和性，确保Pod分布在不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - final-ddd
+              topologyKey: kubernetes.io/hostname
+      
+      # 优雅关闭
+      terminationGracePeriodSeconds: 30
+
+---
+# ServiceAccount for the application
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: final-ddd-app
+  labels:
+    app: final-ddd
+    component: backend
+automountServiceAccountToken: false
+
+---
+# Role for the application (minimal permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: final-ddd-app
+  labels:
+    app: final-ddd
+    component: backend
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+# RoleBinding for the application
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: final-ddd-app
+  labels:
+    app: final-ddd
+    component: backend
+subjects:
+- kind: ServiceAccount
+  name: final-ddd-app
+  namespace: default
+roleRef:
+  kind: Role
+  name: final-ddd-app
+  apiGroup: rbac.authorization.k8s.io

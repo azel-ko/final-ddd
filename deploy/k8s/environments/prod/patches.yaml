@@ -1,0 +1,126 @@
+# 生产环境补丁
+
+# 应用部署补丁 - 高可用和资源配置
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: final-ddd-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    spec:
+      containers:
+      - name: app
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+      # 添加反亲和性，确保 Pod 分布在不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - final-ddd
+              topologyKey: kubernetes.io/hostname
+
+---
+# PostgreSQL 部署补丁 - 生产资源配置
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  template:
+    spec:
+      containers:
+      - name: postgres
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        env:
+        - name: POSTGRES_SHARED_PRELOAD_LIBRARIES
+          value: "pg_stat_statements"
+        - name: POSTGRES_MAX_CONNECTIONS
+          value: "200"
+
+---
+# PVC 补丁 - 生产存储大小
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# Ingress 补丁 - 生产环境配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: final-ddd-ingress
+  annotations:
+    # 生产环境使用正式证书
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # 生产环境中间件配置（严格安全）
+    traefik.ingress.kubernetes.io/router.middlewares: final-ddd-prod-security-headers@kubernetescrd,final-ddd-prod-rate-limit@kubernetescrd,final-ddd-prod-compress@kubernetescrd,final-ddd-prod-error-pages@kubernetescrd
+    # 强制 HTTPS 重定向
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    # 生产环境优化
+    traefik.ingress.kubernetes.io/router.priority: "100"
+spec:
+  tls:
+  - hosts:
+    - app.yourdomain.com  # 替换为实际生产域名
+    secretName: prod-tls-secret
+  rules:
+  - host: app.yourdomain.com  # 替换为实际生产域名
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 8080
+      # 生产环境健康检查端点（受保护）
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 8080
+      # 生产环境指标端点（需要认证）
+      - path: /metrics
+        pathType: Exact
+        backend:
+          service:
+            name: final-ddd-service
+            port:
+              number: 9090

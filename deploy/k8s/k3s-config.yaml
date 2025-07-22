@@ -1,0 +1,87 @@
+# k3s 配置文件
+# 用于自定义 k3s 安装和配置
+
+# 单节点配置
+single-node:
+  # 禁用不需要的组件以节省资源
+  disable:
+    - servicelb  # 使用 Traefik LoadBalancer
+  
+  # 启用的功能
+  enable:
+    - metrics-server
+  
+  # 资源限制
+  kubelet-arg:
+    - "max-pods=50"
+    - "eviction-hard=memory.available<100Mi"
+  
+  # 网络配置
+  flannel-backend: "vxlan"
+
+# 多节点服务器配置
+multi-node-server:
+  # 集群初始化
+  cluster-init: true
+  
+  # 数据存储
+  datastore-endpoint: "etcd"
+  
+  # 启用的功能
+  enable:
+    - metrics-server
+  
+  # 网络配置
+  flannel-backend: "vxlan"
+  cluster-cidr: "10.42.0.0/16"
+  service-cidr: "10.43.0.0/16"
+
+# 工作节点配置
+agent-node:
+  # 节点标签
+  node-label:
+    - "node-type=worker"
+  
+  # 资源限制
+  kubelet-arg:
+    - "max-pods=100"
+    - "eviction-hard=memory.available<200Mi"
+
+# 生产环境优化配置
+production:
+  # 安全配置
+  protect-kernel-defaults: true
+  
+  # 审计日志
+  audit-log-path: "/var/log/k3s-audit.log"
+  audit-log-maxage: 30
+  audit-log-maxbackup: 10
+  audit-log-maxsize: 100
+  
+  # 资源限制
+  kubelet-arg:
+    - "max-pods=200"
+    - "eviction-hard=memory.available<500Mi,nodefs.available<10%"
+    - "eviction-soft=memory.available<1Gi,nodefs.available<15%"
+    - "eviction-soft-grace-period=memory.available=2m,nodefs.available=2m"
+  
+  # 网络策略
+  flannel-backend: "vxlan"
+  
+  # 启用功能
+  enable:
+    - metrics-server
+
+# 开发环境配置
+development:
+  # 禁用不需要的组件
+  disable:
+    - servicelb
+  
+  # 启用调试
+  debug: true
+  
+  # 资源限制较宽松
+  kubelet-arg:
+    - "max-pods=30"
+    - "eviction-hard=memory.available<50Mi"

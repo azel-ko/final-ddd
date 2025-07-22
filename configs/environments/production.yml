@@ -1,0 +1,40 @@
+# 生产环境配置覆盖
+app:
+  env: production
+
+database:
+  # 生产环境 PostgreSQL 配置
+  url: ${DATABASE_URL:postgresql://postgres:${POSTGRES_PASSWORD}@postgres-prod:5432/final_ddd?sslmode=require}
+  host: ${DB_HOST:postgres-prod}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:final_ddd}
+  user: ${DB_USER:postgres}
+  password: ${DB_PASSWORD:${POSTGRES_PASSWORD}}
+  ssl_mode: ${DB_SSL_MODE:require}
+  
+  # 生产环境连接池配置（较大）
+  pool:
+    max_open: ${DB_MAX_OPEN:50}
+    max_idle: ${DB_MAX_IDLE:10}
+    max_lifetime: ${DB_MAX_LIFETIME:600s}
+
+log:
+  level: ${LOG_LEVEL:info}
+  output: ${LOG_OUTPUT:file}
+  file_path: ${LOG_FILE_PATH:/var/log/app/app.log}
+  max_size: ${LOG_MAX_SIZE:100}
+  max_backups: ${LOG_MAX_BACKUPS:10}
+  max_age: ${LOG_MAX_AGE:30}
+  compress: ${LOG_COMPRESS:true}
+
+# 生产环境监控配置
+monitoring:
+  metrics:
+    enabled: ${METRICS_ENABLED:true}
+    port: ${METRICS_PORT:9090}
+  loki:
+    enabled: ${LOKI_ENABLED:true}
+    endpoint: ${LOKI_ENDPOINT:http://loki:3100}
+  tracing:
+    enabled: ${TRACING_ENABLED:true}
+    jaeger_endpoint: ${JAEGER_ENDPOINT:http://jaeger:14268/api/traces}

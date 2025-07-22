@@ -2,7 +2,7 @@
 package migration
 
 import (
-	baseMigration "github.com/azel-ko/final-ddd/pkg/database/migration"
+	baseMigration "github.com/azel-ko/final-ddd/internal/pkg/database/migration"
 )
 
 // RegisterMigrations 注册所有迁移

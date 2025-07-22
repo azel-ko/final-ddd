@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/azel-ko/final-ddd/pkg/version"
+	"github.com/azel-ko/final-ddd/internal/pkg/version"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
